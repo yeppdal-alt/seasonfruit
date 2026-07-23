@@ -354,6 +354,29 @@ st.markdown(
         font-size: 0.88rem;
         color: var(--muted);
     }
+    /* 좁은 화면: 이모지가 고정 크기로 자리를 많이 차지해 글자가 좁은 칸에 억지로
+       줄바꿈되는 것을 완화한다. 이모지/여백을 줄여 글자가 쓸 수 있는 폭을 넓힌다. */
+    @media (max-width: 600px) {
+        .status-card {
+            padding: 1.4rem 1.3rem;
+            gap: 1rem;
+            min-height: 0;
+        }
+        .status-card .emoji {
+            font-size: 3.2rem;
+        }
+        .status-card .title {
+            font-size: 1.25rem;
+            margin-bottom: 0.35rem;
+        }
+        .status-card .analysis-line {
+            font-size: 0.92rem;
+            line-height: 1.5;
+        }
+        .status-card .extra-info {
+            font-size: 0.82rem;
+        }
+    }
     .light {
         display: inline-block;
         width: 16px;
