@@ -71,13 +71,6 @@ st.markdown(
         color: var(--muted);
         margin-bottom: 1.2rem;
     }
-    .preset-card {
-        background: #ffffff;
-        border-radius: 20px;
-        padding: 1rem 1.1rem;
-        box-shadow: 0 8px 20px rgba(36,31,43,0.07);
-        margin-bottom: 1rem;
-    }
     .st-key-preset_list .stButton > button {
         border-radius: 14px;
         border: 1px solid rgba(36,31,43,0.06);
@@ -149,16 +142,17 @@ def _stream_solar_reply(messages: list):
         yield FALLBACK_ANSWER
 
 
-st.markdown('<div class="chat-title">💬 과일 가격 AI 챗봇</div>', unsafe_allow_html=True)
+st.markdown('<div class="chat-title">🍎 오늘의 과일 인사이트</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="chat-sub">궁금한 걸 왼쪽에서 골라 클릭하거나, 오른쪽 채팅창에 직접 물어보세요.</div>',
+    '<div class="chat-sub">가격 변화의 이유부터 제철 정보까지, 과일을 더 똑똑하게 즐기는 '
+    "팁을 소개합니다.<br>궁금한 걸 왼쪽에서 골라 클릭하거나, 오른쪽 채팅창에 직접 "
+    '물어보세요.</div>',
     unsafe_allow_html=True,
 )
 
 left, right = st.columns([1, 2], gap="medium")
 
 with left:
-    st.markdown('<div class="preset-card">', unsafe_allow_html=True)
     st.markdown("**자주 묻는 질문**")
     with st.container(key="preset_list"):
         for i, q in enumerate(PRESET_QUESTIONS):
@@ -166,7 +160,6 @@ with left:
                 q, key=f"preset_{i}", use_container_width=True,
                 on_click=_ask_preset, args=(q,),
             )
-    st.markdown("</div>", unsafe_allow_html=True)
 
 with right:
     chat_box = st.container(height=520, border=True)
