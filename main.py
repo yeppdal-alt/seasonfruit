@@ -1033,24 +1033,15 @@ else:
     chart_df["month_label"] = month_labels
     bar_colors = ["#22c55e" if i == cheapest_pos else "#ff8a5b" for i in range(len(chart_df))]
 
-    def _fmt_label(v) -> str:
-        if v is None or (isinstance(v, float) and math.isnan(v)):
-            return ""
-        if v >= 10000:
-            return f"{v / 10000:.1f}만"
-        return f"{v / 1000:.1f}천"
-
     fig = go.Figure()
     division_series = {}  # 이벤트(최저가/지금) 주석의 y좌표 앵커로 재사용
 
+    # 참고 이미지처럼 심플하게: 글로우/그라디언트 채우기/값 라벨을 모두 걷어내고,
+    # 얇은 선 + 속이 빈(hollow) 원형 마커만 남긴다. 정확한 가격은 hover 툴팁으로 확인.
     divisions = fruit_df["division"].unique().tolist()
     if "소매" in divisions or "도매" in divisions:
-        # 소매(위쪽 값표시) / 도매(아래쪽 값표시)를 부드러운 곡선 + 글로우 + 값 라벨로 표현
-        line_specs = [
-            ("소매", "#ff8a5b", "#c2410c", "top center", "rgba(255,138,91,0.18)"),
-            ("도매", "#57534e", "#3f3c38", "bottom center", "rgba(87,83,78,0.08)"),
-        ]
-        for div_name, color, label_color, text_pos, fill_color in line_specs:
+        line_specs = [("소매", "#ff8a5b"), ("도매", "#57534e")]
+        for div_name, color in line_specs:
             if div_name not in divisions:
                 continue
             d = _chronological_monthly(
@@ -1061,34 +1052,16 @@ else:
             ).reset_index()
             division_series[div_name] = d["price"]
 
-            # 은은한 글로우 효과: 같은 선을 굵고 흐리게 한 번 더 깔아준다.
             fig.add_trace(
                 go.Scatter(
                     x=chart_df["month_label"],
                     y=d["price"],
-                    mode="lines",
-                    line=dict(color=color, width=11, shape="spline", smoothing=0.35),
-                    opacity=0.13,
-                    showlegend=False,
-                    hoverinfo="skip",
-                )
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=chart_df["month_label"],
-                    y=d["price"],
-                    mode="lines+markers+text",
+                    mode="lines+markers",
                     name=div_name,
-                    line=dict(color=color, width=3.5, shape="spline", smoothing=0.35),
-                    marker=dict(size=9, color=color, line=dict(color="white", width=2)),
-                    text=[_fmt_label(v) for v in d["price"]],
-                    textposition=text_pos,
-                    textfont=dict(size=12, color=label_color, family="Arial Black, Arial"),
-                    fill="tozeroy",
-                    fillcolor=fill_color,
+                    line=dict(color=color, width=2.2),
+                    marker=dict(size=8, color="#ffffff", line=dict(color=color, width=2)),
                     hovertemplate="%{x}<br>" + div_name + ": %{y:,.0f}원<extra></extra>",
                     connectgaps=False,
-                    cliponaxis=False,  # 좌우 여백을 0에 가깝게 줄여도 양끝 값 라벨이 잘리지 않도록
                 )
             )
     else:
@@ -1100,76 +1073,55 @@ else:
                 marker_color=bar_colors,
                 marker_line_width=0,
                 name="평균가격",
-                text=[_fmt_label(v) for v in chart_df["price"]],
-                textposition="outside",
-                textfont=dict(size=12, color="#5c3a21", family="Arial Black, Arial"),
                 hovertemplate="%{x}<br>평균가: %{y:,.0f}원<extra></extra>",
             )
         )
 
-    # 참고용 평균가 기준선
     anchor_series = division_series.get("소매", next(iter(division_series.values())))
-    avg_price = anchor_series.mean()
-    if pd.notna(avg_price):
-        # annotation_position="right"로 두면 플롯 바깥(오른쪽 여백)에 라벨을 그리기 위해
-        # 여백이 그대로 남아있었다. 축 숫자를 지운 만큼 여백도 함께 줄어들도록, 라벨을
-        # 플롯 "안쪽" 왼쪽 위에 얹는 방식으로 바꿔 오른쪽 여백을 그래프에 되돌려준다.
-        fig.add_hline(
-            y=avg_price,
-            line_dash="dot",
-            line_color="#c4c4c4",
-            line_width=1.3,
-            annotation_text=f"평균 {avg_price:,.0f}원",
-            annotation_position="top left",
-            annotation_font=dict(size=10, color="#9ca3af"),
-        )
 
-    # 최저가 달은 은은한 배경 하이라이트(면), 현재 달은 또렷한 점선 박스(테두리)로 서로 다른
-    # 방식을 사용한다. 표현 방식 자체가 다르기 때문에 두 시점이 같은 달이어도 서로 지워지지
-    # 않고 "면 + 테두리"가 함께 보인다.
+    # 최저가 달은 참고 이미지의 "적정시기" 밴드처럼, 은은한 배경 면 + 좌우 점선 테두리로
+    # 표현한다. 현재 달은 축 위에 점 하나를 콕 찍고 위로 점선을 그어 "지금 여기"를 가리킨다.
     pos_in_chart = cheapest_pos
     current_pos = len(chart_df) - 1  # 조회 구간의 마지막 자리 = 항상 "지금"
 
     CHEAPEST_COLOR = "#22c55e"
     CURRENT_COLOR = "#8b5cf6"
 
-    # 최저가 달: 배경 면 하이라이트
     fig.add_vrect(
         x0=pos_in_chart - 0.5, x1=pos_in_chart + 0.5,
-        fillcolor=CHEAPEST_COLOR, opacity=0.13, line_width=0,
+        fillcolor=CHEAPEST_COLOR, opacity=0.10, line_width=0,
     )
-    # 현재 달: 점선 테두리 박스 (채우기 없음)
+    for edge in (pos_in_chart - 0.5, pos_in_chart + 0.5):
+        fig.add_shape(
+            type="line", x0=edge, x1=edge, y0=0, y1=1, xref="x", yref="paper",
+            line=dict(color=CHEAPEST_COLOR, width=1.3, dash="dot"),
+        )
+    fig.add_annotation(
+        x=chart_df["month_label"].iloc[pos_in_chart], y=1.06, xref="x", yref="paper",
+        text="최저가 달", showarrow=False,
+        font=dict(size=12, color=CHEAPEST_COLOR, family="Arial Black, Arial"),
+    )
+
+    # 현재 달: 점선 세로선 + 축 위의 점 하나로 "지금 시점"을 가리킨다 (배지 박스 없이 담백하게).
     fig.add_shape(
-        type="rect",
-        x0=current_pos - 0.5, x1=current_pos + 0.5,
-        y0=0, y1=1, xref="x", yref="paper",
-        line=dict(color=CURRENT_COLOR, width=2.5, dash="dot"),
-        fillcolor="rgba(0,0,0,0)",
+        type="line", x0=current_pos, x1=current_pos, y0=0, y1=1, xref="x", yref="paper",
+        line=dict(color=CURRENT_COLOR, width=1.3, dash="dot"),
     )
-
-    # 두 이벤트가 같은 달일 때도 라벨이 겹치지 않도록 배지를 위아래로 나눠 쌓는다.
-    same_month = current_pos == pos_in_chart
-    fig.add_annotation(
-        x=chart_df["month_label"].iloc[pos_in_chart], y=1.0, xref="x", yref="paper",
-        text="🏆 최저가 달", showarrow=False, yshift=(44 if same_month else 18),
-        font=dict(size=12, color="white", family="Arial Black, Arial"),
-        bgcolor=CHEAPEST_COLOR, borderpad=5,
+    fig.add_shape(
+        type="circle", xref="x", yref="paper",
+        x0=current_pos - 0.09, x1=current_pos + 0.09, y0=-0.035, y1=0.035,
+        fillcolor=CURRENT_COLOR, line=dict(color=CURRENT_COLOR, width=0),
     )
     fig.add_annotation(
-        x=chart_df["month_label"].iloc[current_pos], y=1.0, xref="x", yref="paper",
-        text="📍 지금", showarrow=False, yshift=18,
-        font=dict(size=12, color="white", family="Arial Black, Arial"),
-        bgcolor=CURRENT_COLOR, borderpad=5,
+        x=chart_df["month_label"].iloc[current_pos], y=1.06, xref="x", yref="paper",
+        text="지금", showarrow=False,
+        font=dict(size=12, color=CURRENT_COLOR, family="Arial Black, Arial"),
     )
 
-    # 범례를 차트 "아래"로 내려서, 상단은 최저가/지금 뱃지 전용 공간으로 비워둔다.
-    # (좁은 화면에서 범례와 뱃지가 같은 줄에서 겹쳐 보이는 것이 모바일 "깨짐"의 주요 원인이었다.)
     fig.update_layout(
-        height=460,
-        # y축 눈금/숫자와 평균가 라벨의 바깥 여백을 없앤 만큼, 좌우 여백도 최소로 줄여
-        # 그래프(선/막대)가 카드 너비를 실제로 더 넓게 채우도록 한다.
-        margin=dict(l=0, r=0, t=56, b=60),
-        plot_bgcolor="rgba(255,255,255,0.35)",
+        height=420,
+        margin=dict(l=0, r=0, t=44, b=60),
+        plot_bgcolor="rgba(255,255,255,0)",
         paper_bgcolor="rgba(0,0,0,0)",
         font=dict(family="Pretendard, -apple-system, sans-serif", size=12),
         legend=dict(
@@ -1177,7 +1129,7 @@ else:
             font=dict(size=12), bgcolor="rgba(0,0,0,0)",
         ),
         yaxis=dict(
-            # 미니멀한 디자인: 축 눈금/숫자는 감추고, 정확한 가격은 막대·라인 위 값 라벨과
+            # 미니멀한 디자인: 축 눈금/숫자와 그리드를 감추고, 정확한 가격은
             # hover 툴팁(hovermode="x unified")으로만 확인하도록 한다.
             title=None,
             showticklabels=False,
@@ -1187,12 +1139,11 @@ else:
         ),
         xaxis=dict(
             title=None,
-            showgrid=True,
-            gridcolor="#f8f8f8",
+            showgrid=False,
             showline=True,
             linecolor="#e5e7eb",
             tickangle=-45,
-            tickfont=dict(size=11),
+            tickfont=dict(size=11, color="#9ca3af"),
             automargin=True,
         ),
         hovermode="x unified",
