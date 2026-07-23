@@ -1272,6 +1272,28 @@ else:
             )
             st.markdown(table_html, unsafe_allow_html=True)
 
+        # --------------------------------------------------------------
+        # 디버그용 원본 데이터 (소매/도매 가격 역전 문제를 직접 확인·리포트할 수 있도록,
+        # 정규화 전 원본 가격(raw_price)과 조사 단위(unit·unit_sz)를 그대로 보여준다.)
+        # --------------------------------------------------------------
+        if is_live and "unit_sz" in fruit_df.columns:
+            with st.expander("🔍 원본 데이터로 확인 (소매/도매 단위·가격)"):
+                debug_df = fruit_df[
+                    ["year", "month", "division", "raw_price", "unit", "unit_sz", "price"]
+                ].sort_values(["year", "month", "division"]).rename(
+                    columns={
+                        "year": "연도", "month": "월", "division": "구분",
+                        "raw_price": "원본가격(API)", "unit": "단위", "unit_sz": "단위크기",
+                        "price": "정규화 단위당가격",
+                    }
+                )
+                st.dataframe(debug_df, use_container_width=True, hide_index=True)
+                st.caption(
+                    "여전히 도매가 소매보다 비싸 보인다면, 위 표에서 해당 달의 단위/단위크기가 "
+                    "실제로 다른지 확인해 알려주세요. 단위크기가 비어 있거나 두 구분이 똑같은 "
+                    "값이면 정규화가 적용되지 않은 것이라 원인을 좁힐 수 있어요."
+                )
+
     ctgry_cd, item_cd = ITEM_CODE_LOOKUP.get(selected, ("", ""))
 
     # ----------------------------------------------------------------------------
