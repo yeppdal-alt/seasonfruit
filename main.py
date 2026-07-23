@@ -999,9 +999,26 @@ fruit_df, is_live = fetch_fruit_series(selected, START_YM, END_YM)
 if not is_live:
     st.info(
         f"⚠️ '{selected}'의 공공데이터 API 응답을 확인하지 못해 계절성을 반영한 데모 데이터로 표시하고 있어요. "
-        "`FRUITS_API_KEY`가 secrets에 등록되어 있는지, 인증키 활용 승인이 완료됐는지 확인해 주세요.",
+        "다른 과일은 정상 조회된다면 키 문제가 아니라, 이 품목만 최근 조사 데이터가 아예 없을 "
+        "가능성이 커요(자몽처럼 유통량이 적은 수입 품목은 특정 달에 조사가 안 되기도 해요). "
+        "`FRUITS_API_KEY`가 secrets에 등록되어 있는지, 인증키 활용 승인이 완료됐는지도 함께 확인해 주세요.",
         icon="ℹ️",
     )
+    _debug_ctgry, _debug_item = ITEM_CODE_LOOKUP.get(selected, FALLBACK_ITEM_CODES.get(selected, ("400", "")))
+    with st.expander("🔍 실제로 사용한 조회 조건 확인"):
+        st.code(
+            f"부류코드(ctgry_cd): {_debug_ctgry}\n"
+            f"품목코드(item_cd): {_debug_item}\n"
+            f"조회 기간: {START_YM} ~ {END_YM}\n\n"
+            f"{API_ENDPOINT}"
+            f"?serviceKey=(발급받은 키)&returnType=json&pageNo=1&numOfRows=1000"
+            f"&cond[exmn_ym::GTE]={START_YM}&cond[exmn_ym::LTE]={END_YM}"
+            f"&cond[ctgry_cd::EQ]={_debug_ctgry}&cond[item_cd::EQ]={_debug_item}"
+        )
+        st.caption(
+            "위 URL의 (발급받은 키) 자리에 본인의 FRUITS_API_KEY를 넣어 브라우저에서 직접 열어보면, "
+            "키 자체 문제인지 이 품목의 데이터가 원래 없는 것인지 바로 구분할 수 있어요."
+        )
 
 overall_monthly = None if fruit_df.empty else _chronological_monthly(fruit_df, START_YM, END_YM)
 latest = None if overall_monthly is None else _latest_with_data(overall_monthly)
