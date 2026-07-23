@@ -32,8 +32,12 @@ from datetime import date
 import pandas as pd
 import plotly.graph_objects as go
 import requests
-from openai import OpenAI
 import streamlit as st
+
+try:
+    from openai import OpenAI  # Solar(solar-open2) 호출용. 없어도 앱은 규칙 기반 문구로 정상 동작.
+except ImportError:
+    OpenAI = None
 
 # ----------------------------------------------------------------------------
 # 기본 설정
@@ -367,6 +371,9 @@ def generate_price_commentary(
     try:
         api_key = st.secrets["SOLAR_API_KEY"]
     except Exception:
+        return None
+
+    if OpenAI is None:  # openai 패키지가 설치되지 않은 환경 (requirements.txt 미반영 등)
         return None
 
     try:
