@@ -1310,25 +1310,39 @@ else:
         # 정규화 전 원본 가격(raw_price)과 조사 단위(unit·unit_sz)를 그대로 보여준다.)
         # --------------------------------------------------------------
         if is_live and "unit_sz" in fruit_df.columns:
-            with st.expander("🔍 원본 데이터로 확인 (소매/도매 단위·가격)"):
-                debug_df = fruit_df[
-                    ["year", "month", "division", "raw_price", "unit", "unit_sz", "unit_basis", "price"]
-                ].sort_values(["year", "month", "division"]).rename(
-                    columns={
-                        "year": "연도", "month": "월", "division": "구분",
-                        "raw_price": "원본가격(API)", "unit": "단위", "unit_sz": "단위크기",
-                        "unit_basis": "환산 기준", "price": "정규화 가격",
-                    }
-                )
-                debug_df["환산 기준"] = debug_df["환산 기준"].map(
-                    {"kg": "1kg당으로 환산", "raw": "무게 환산 불가(원본 단위 기준)"}
-                )
-                st.dataframe(debug_df, use_container_width=True, hide_index=True)
-                st.caption(
-                    "'환산 기준'이 두 구분 모두 '1kg당으로 환산'인데도 가격이 역전되어 있다면 "
-                    "실제 시세 차이일 가능성이 커요. 반대로 한쪽이라도 '무게 환산 불가'라면 "
-                    "개·상자 등 무게가 아닌 단위라 정확한 비교가 어려운 경우예요."
-                )
+            # 원본 데이터 구조에 대한 방어적 코드: unit/unit_sz/unit_basis/raw_price 컬럼이
+            # 예상과 다르게 일부 빠져 있어도(품목별 API 응답 편차 등) 이 디버그 뷰 하나 때문에
+            # 화면 전체가 죽지 않도록 try/except로 감싸고, 존재하는 컬럼만 선택해서 보여준다.
+            try:
+                with st.expander("🔍 원본 데이터로 확인 (소매/도매 단위·가격)"):
+                    wanted_cols = [
+                        "year", "month", "division", "raw_price", "unit", "unit_sz",
+                        "unit_basis", "price",
+                    ]
+                    existing_cols = [c for c in wanted_cols if c in fruit_df.columns]
+                    sort_cols = [c for c in ("year", "month", "division") if c in existing_cols]
+                    debug_df = fruit_df[existing_cols].copy()
+                    if sort_cols:
+                        debug_df = debug_df.sort_values(sort_cols)
+                    if "unit_basis" in debug_df.columns:
+                        debug_df["unit_basis"] = debug_df["unit_basis"].map(
+                            {"kg": "1kg당으로 환산", "raw": "무게 환산 불가(원본 단위 기준)"}
+                        ).fillna(debug_df["unit_basis"])
+                    debug_df = debug_df.rename(
+                        columns={
+                            "year": "연도", "month": "월", "division": "구분",
+                            "raw_price": "원본가격(API)", "unit": "단위", "unit_sz": "단위크기",
+                            "unit_basis": "환산 기준", "price": "정규화 가격",
+                        }
+                    )
+                    st.dataframe(debug_df, use_container_width=True, hide_index=True)
+                    st.caption(
+                        "'환산 기준'이 두 구분 모두 '1kg당으로 환산'인데도 가격이 역전되어 있다면 "
+                        "실제 시세 차이일 가능성이 커요. 반대로 한쪽이라도 '무게 환산 불가'라면 "
+                        "개·상자 등 무게가 아닌 단위라 정확한 비교가 어려운 경우예요."
+                    )
+            except Exception:
+                pass  # 디버그 보조 화면일 뿐이므로, 문제가 있어도 조용히 건너뛴다.
 
     ctgry_cd, item_cd = ITEM_CODE_LOOKUP.get(selected, ("", ""))
 
