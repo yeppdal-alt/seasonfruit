@@ -856,48 +856,48 @@ else:
             annotation_font=dict(size=11, color="#9ca3af"),
         )
 
-    # 최저가 달 + 현재 달을 각각 해당 지점에 화살표 뱃지와 원형 하이라이트로 표시.
-    # 두 시점이 같은 달이어도 화살표가 서로 반대 방향(왼쪽 위 / 오른쪽 위)에서 같은 점을
-    # 가리키게 되므로, 하나로 뭉개지지 않고 두 정보가 모두 또렷하게 보인다.
+    # 최저가 달은 은은한 배경 하이라이트(면), 현재 달은 또렷한 점선 박스(테두리)로 서로 다른
+    # 방식을 사용한다. 표현 방식 자체가 다르기 때문에 두 시점이 같은 달이어도 서로 지워지지
+    # 않고 "면 + 테두리"가 함께 보인다.
     pos_in_chart = cheapest_pos
     current_pos = len(chart_df) - 1  # 조회 구간의 마지막 자리 = 항상 "지금"
 
-    def _mark_event(pos: int, label: str, color: str, ax: int, ay: int):
-        y_val = anchor_series.iloc[pos]
-        x_val = chart_df["month_label"].iloc[pos]
-        if pd.notna(y_val):
-            fig.add_trace(
-                go.Scatter(
-                    x=[x_val],
-                    y=[y_val],
-                    mode="markers",
-                    marker=dict(size=22, color="rgba(0,0,0,0)", line=dict(color=color, width=3)),
-                    showlegend=False,
-                    hoverinfo="skip",
-                )
-            )
-            fig.add_annotation(
-                x=x_val, y=y_val, xref="x", yref="y",
-                text=label, showarrow=True, arrowhead=2, arrowsize=1, arrowwidth=2,
-                arrowcolor=color, ax=ax, ay=ay,
-                font=dict(size=12, color="white", family="Arial Black, Arial"),
-                bgcolor=color, borderpad=5,
-            )
-        else:
-            fig.add_annotation(
-                x=x_val, y=1.0, xref="x", yref="paper",
-                text=label, showarrow=False, yshift=18,
-                font=dict(size=12, color="white", family="Arial Black, Arial"),
-                bgcolor=color, borderpad=5,
-            )
+    CHEAPEST_COLOR = "#22c55e"
+    CURRENT_COLOR = "#8b5cf6"
 
-    _mark_event(pos_in_chart, "🏆 최저가", "#22c55e", ax=-46, ay=-38)
-    _mark_event(current_pos, "📍 지금", "#8b5cf6", ax=46, ay=-38)
+    # 최저가 달: 배경 면 하이라이트
+    fig.add_vrect(
+        x0=pos_in_chart - 0.5, x1=pos_in_chart + 0.5,
+        fillcolor=CHEAPEST_COLOR, opacity=0.13, line_width=0,
+    )
+    # 현재 달: 점선 테두리 박스 (채우기 없음)
+    fig.add_shape(
+        type="rect",
+        x0=current_pos - 0.5, x1=current_pos + 0.5,
+        y0=0, y1=1, xref="x", yref="paper",
+        line=dict(color=CURRENT_COLOR, width=2.5, dash="dot"),
+        fillcolor="rgba(0,0,0,0)",
+    )
+
+    # 두 이벤트가 같은 달일 때도 라벨이 겹치지 않도록 배지를 위아래로 나눠 쌓는다.
+    same_month = current_pos == pos_in_chart
+    fig.add_annotation(
+        x=chart_df["month_label"].iloc[pos_in_chart], y=1.0, xref="x", yref="paper",
+        text="🏆 최저가 달", showarrow=False, yshift=(44 if same_month else 18),
+        font=dict(size=12, color="white", family="Arial Black, Arial"),
+        bgcolor=CHEAPEST_COLOR, borderpad=5,
+    )
+    fig.add_annotation(
+        x=chart_df["month_label"].iloc[current_pos], y=1.0, xref="x", yref="paper",
+        text="📍 지금", showarrow=False, yshift=18,
+        font=dict(size=12, color="white", family="Arial Black, Arial"),
+        bgcolor=CURRENT_COLOR, borderpad=5,
+    )
 
     fig.update_layout(
         height=470,
         margin=dict(l=20, r=30, t=70, b=20),
-        plot_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(255,255,255,0.35)",
         paper_bgcolor="rgba(0,0,0,0)",
         font=dict(family="Pretendard, -apple-system, sans-serif"),
         legend=dict(
@@ -914,48 +914,49 @@ else:
         ),
         xaxis=dict(
             title=None,
-            showgrid=False,
+            showgrid=True,
+            gridcolor="#f8f8f8",
             showline=True,
             linecolor="#e5e7eb",
         ),
         hovermode="x unified",
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    with st.container(border=True):
+        st.plotly_chart(fig, use_container_width=True)
 
-    # ------------------------------------------------------------------
-    # 월별 가격표 (그래프 검증용, 심플한 표)
-    # ------------------------------------------------------------------
-    st.markdown("##### 🧾 월별 가격표")
+        # --------------------------------------------------------------
+        # 월별 가격표 (그래프 검증용, 접어두는 심플한 표)
+        # --------------------------------------------------------------
+        with st.expander("🧾 월별 가격표 보기"):
+            table_df = pd.DataFrame({"연월": chart_df["month_label"]})
+            if "소매" in divisions or "도매" in divisions:
+                for div_name in ["소매", "도매"]:
+                    if div_name in divisions:
+                        d = _chronological_monthly(
+                            fruit_df[fruit_df["division"] == div_name], START_YM, END_YM
+                        )
+                        d = d.set_index(["year", "month"]).reindex(
+                            list(zip(chart_df["year"], chart_df["month"]))
+                        ).reset_index()
+                        table_df[div_name] = d["price"]
+            else:
+                table_df["평균가"] = chart_df["price"]
 
-    table_df = pd.DataFrame({"연월": chart_df["month_label"]})
-    if "소매" in divisions or "도매" in divisions:
-        for div_name in ["소매", "도매"]:
-            if div_name in divisions:
-                d = _chronological_monthly(
-                    fruit_df[fruit_df["division"] == div_name], START_YM, END_YM
-                )
-                d = d.set_index(["year", "month"]).reindex(
-                    list(zip(chart_df["year"], chart_df["month"]))
-                ).reset_index()
-                table_df[div_name] = d["price"]
-    else:
-        table_df["평균가"] = chart_df["price"]
+            mark = [""] * len(table_df)
+            if current_pos == pos_in_chart:
+                mark[pos_in_chart] = "최저가 · 지금"
+            else:
+                mark[pos_in_chart] = "최저가"
+                mark[current_pos] = "지금"
+            table_df["구분"] = mark
 
-    mark = [""] * len(table_df)
-    if current_pos == pos_in_chart:
-        mark[pos_in_chart] = "최저가 · 지금"
-    else:
-        mark[pos_in_chart] = "최저가"
-        mark[current_pos] = "지금"
-    table_df["구분"] = mark
+            price_cols = [c for c in table_df.columns if c not in ("연월", "구분")]
+            for c in price_cols:
+                table_df[c] = table_df[c].apply(lambda v: f"{v:,.0f}원" if pd.notna(v) else "-")
+            table_df = table_df[["연월", *price_cols, "구분"]]
 
-    price_cols = [c for c in table_df.columns if c not in ("연월", "구분")]
-    for c in price_cols:
-        table_df[c] = table_df[c].apply(lambda v: f"{v:,.0f}원" if pd.notna(v) else "-")
-    table_df = table_df[["연월", *price_cols, "구분"]]
-
-    st.dataframe(table_df, hide_index=True, use_container_width=True)
+            st.dataframe(table_df, hide_index=True, use_container_width=True)
 
     ctgry_cd, item_cd = ITEM_CODE_LOOKUP.get(selected, ("", ""))
     st.caption(
