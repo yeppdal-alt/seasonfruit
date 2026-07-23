@@ -544,8 +544,15 @@ def _extract_items(payload: dict):
     return []
 
 
-def _call_api(api_key: str, ctgry_cd: str, item_cd: str, start_ym: str, end_ym: str) -> list:
+def _call_api(api_key: str, ctgry_cd: str, item_cd: str, start_ym: str, end_ym: str) -> tuple[list, dict]:
+    """API를 호출해 (원본 row 목록, 첫 페이지 응답 메타정보)를 반환한다.
+
+    메타정보(result_code/result_msg/total_count)는 "요청 자체는 정상 처리됐지만 이 품목의
+    데이터가 원래 없는 경우(totalCount=0)"와 "키/네트워크 문제로 요청이 실패한 경우"를
+    구분해서 사용자에게 정확한 안내를 하기 위해 남겨둔다.
+    """
     rows = []
+    meta = {"result_code": None, "result_msg": None, "total_count": None}
     page_no = 1
     num_of_rows = 1000
     while True:
@@ -561,14 +568,24 @@ def _call_api(api_key: str, ctgry_cd: str, item_cd: str, start_ym: str, end_ym: 
         }
         resp = requests.get(API_ENDPOINT, params=params, timeout=10)
         resp.raise_for_status()
-        items = _extract_items(resp.json())
+        payload = resp.json()
+        if page_no == 1:
+            try:
+                header = payload["response"]["header"]
+                body = payload["response"]["body"]
+                meta["result_code"] = str(header.get("resultCode", "")).strip()
+                meta["result_msg"] = str(header.get("resultMsg", "")).strip()
+                meta["total_count"] = body.get("totalCount")
+            except (KeyError, TypeError):
+                pass
+        items = _extract_items(payload)
         if not items:
             break
         rows.extend(items)
         if len(items) < num_of_rows or page_no > 10:
             break
         page_no += 1
-    return rows
+    return rows, meta
 
 
 def _parse_unit_size(raw) -> float | None:
@@ -660,24 +677,34 @@ def _parse_rows(raw_rows: list) -> list:
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_fruit_series(fruit_name: str, start_ym: str, end_ym: str) -> tuple[pd.DataFrame, bool]:
+def fetch_fruit_series(fruit_name: str, start_ym: str, end_ym: str) -> tuple[pd.DataFrame, bool, str]:
     """선택된 과일 1종의 연월별 도/소매 가격을 조회한다.
 
-    반환값: (DataFrame, is_live) — is_live가 False이면 API 호출/파싱 실패로
-    계절성 기반 데모 데이터를 사용했다는 뜻.
+    반환값: (DataFrame, is_live, reason)
+    - is_live가 False이면 API 호출/파싱 실패로 계절성 기반 데모 데이터를 사용했다는 뜻.
+    - reason은 데모로 대체된 이유를 구분한다:
+      "no_data"  = 요청은 정상 처리됐지만(resultCode 정상, totalCount=0) 이 품목·기간에는
+                   원래 조사 데이터가 없는 경우 (키 문제가 아님, 자몽처럼 유통량이 적은
+                   품목에서 흔함)
+      "error"    = 키 미등록/네트워크 오류/그 외 API 오류 등 실제 호출 실패
+      ""         = is_live=True (정상 데이터)
     """
     ctgry_cd, item_cd = ITEM_CODE_LOOKUP.get(fruit_name, FALLBACK_ITEM_CODES.get(fruit_name, ("400", "")))
     try:
         api_key = st.secrets["FRUITS_API_KEY"]
         if not item_cd:
             raise ValueError("item_cd not found")
-        raw_rows = _call_api(api_key, ctgry_cd, item_cd, start_ym, end_ym)
+        raw_rows, meta = _call_api(api_key, ctgry_cd, item_cd, start_ym, end_ym)
         parsed = _parse_rows(raw_rows)
         if not parsed:
-            return _build_demo_dataframe(fruit_name, start_ym, end_ym), False
-        return pd.DataFrame(parsed), True
+            # resultCode가 정상(보통 "0"/"00")인데 totalCount만 0이면, 요청 자체는 잘
+            # 처리됐고 그냥 이 품목의 데이터가 없는 것이다. 그 외(키 오류 등)에는 진짜 오류로 본다.
+            is_ok_result = meta.get("result_code") in (None, "", "0", "00")
+            reason = "no_data" if is_ok_result and meta.get("total_count") == 0 else "error"
+            return _build_demo_dataframe(fruit_name, start_ym, end_ym), False, reason
+        return pd.DataFrame(parsed), True, ""
     except Exception:
-        return _build_demo_dataframe(fruit_name, start_ym, end_ym), False
+        return _build_demo_dataframe(fruit_name, start_ym, end_ym), False, "error"
 
 
 def _month_range(start_ym: str, end_ym: str):
@@ -916,7 +943,7 @@ def cheapest_fruit_this_month(start_ym: str, end_ym: str) -> str:
     """가장 최근 집계월 기준, 연중 최저가 대비 가장 저렴해 보이는 과일을 하나 골라준다."""
     best, best_ratio = MAIN_FRUITS[0], math.inf
     for f in MAIN_FRUITS:
-        series, _ = fetch_fruit_series(f, start_ym, end_ym)
+        series, _, _ = fetch_fruit_series(f, start_ym, end_ym)
         if series.empty:
             continue
         monthly = _chronological_monthly(series, start_ym, end_ym)
@@ -994,16 +1021,23 @@ st.divider()
 # Price Status Card
 # ----------------------------------------------------------------------------
 selected = st.session_state.selected_fruit
-fruit_df, is_live = fetch_fruit_series(selected, START_YM, END_YM)
+fruit_df, is_live, fetch_reason = fetch_fruit_series(selected, START_YM, END_YM)
 
 if not is_live:
-    st.info(
-        f"⚠️ '{selected}'의 공공데이터 API 응답을 확인하지 못해 계절성을 반영한 데모 데이터로 표시하고 있어요. "
-        "다른 과일은 정상 조회된다면 키 문제가 아니라, 이 품목만 최근 조사 데이터가 아예 없을 "
-        "가능성이 커요(자몽처럼 유통량이 적은 수입 품목은 특정 달에 조사가 안 되기도 해요). "
-        "`FRUITS_API_KEY`가 secrets에 등록되어 있는지, 인증키 활용 승인이 완료됐는지도 함께 확인해 주세요.",
-        icon="ℹ️",
-    )
+    if fetch_reason == "no_data":
+        st.info(
+            f"ℹ️ '{selected}'는 공공데이터 API 요청은 정상 처리됐지만(응답 정상, 조회 결과 0건), "
+            "최근 조사 기간에 등록된 가격 데이터가 없어서 계절성을 반영한 데모 데이터로 표시하고 "
+            "있어요. 키/승인 문제는 아니고, 자몽처럼 유통량이 적은 수입 품목은 특정 기간에 조사가 "
+            "안 되기도 해요.",
+            icon="ℹ️",
+        )
+    else:
+        st.info(
+            f"⚠️ '{selected}'의 공공데이터 API 응답을 확인하지 못해 계절성을 반영한 데모 데이터로 표시하고 있어요. "
+            "`FRUITS_API_KEY`가 secrets에 등록되어 있는지, 인증키 활용 승인이 완료됐는지 확인해 주세요.",
+            icon="⚠️",
+        )
     _debug_ctgry, _debug_item = ITEM_CODE_LOOKUP.get(selected, FALLBACK_ITEM_CODES.get(selected, ("400", "")))
     with st.expander("🔍 실제로 사용한 조회 조건 확인"):
         st.code(
