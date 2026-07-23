@@ -663,15 +663,16 @@ else:
         return f"{v / 1000:.1f}천"
 
     fig = go.Figure()
+    division_series = {}  # 이벤트(최저가/지금) 주석의 y좌표 앵커로 재사용
 
     divisions = fruit_df["division"].unique().tolist()
     if "소매" in divisions or "도매" in divisions:
-        # 소매(위쪽 값표시) / 도매(아래쪽 값표시)를 부드러운 곡선 + 화이트링 마커 + 값 라벨로 표현
+        # 소매(위쪽 값표시) / 도매(아래쪽 값표시)를 부드러운 곡선 + 글로우 + 값 라벨로 표현
         line_specs = [
-            ("소매", "#f97316", "#9a3412", "top center", True),
-            ("도매", "#60a5fa", "#1e40af", "bottom center", False),
+            ("소매", "#fb923c", "#9a3412", "top center", "rgba(251,146,60,0.16)"),
+            ("도매", "#60a5fa", "#1e40af", "bottom center", "rgba(96,165,250,0.08)"),
         ]
-        for div_name, color, label_color, text_pos, fill_area in line_specs:
+        for div_name, color, label_color, text_pos, fill_color in line_specs:
             if div_name not in divisions:
                 continue
             d = _chronological_monthly(
@@ -680,29 +681,45 @@ else:
             d = d.set_index(["year", "month"]).reindex(
                 list(zip(chart_df["year"], chart_df["month"]))
             ).reset_index()
+            division_series[div_name] = d["price"]
+
+            # 은은한 글로우 효과: 같은 선을 굵고 흐리게 한 번 더 깔아준다.
+            fig.add_trace(
+                go.Scatter(
+                    x=chart_df["month_label"],
+                    y=d["price"],
+                    mode="lines",
+                    line=dict(color=color, width=11, shape="spline", smoothing=0.35),
+                    opacity=0.13,
+                    showlegend=False,
+                    hoverinfo="skip",
+                )
+            )
             fig.add_trace(
                 go.Scatter(
                     x=chart_df["month_label"],
                     y=d["price"],
                     mode="lines+markers+text",
                     name=div_name,
-                    line=dict(color=color, width=4, shape="spline", smoothing=0.35),
+                    line=dict(color=color, width=3.5, shape="spline", smoothing=0.35),
                     marker=dict(size=9, color=color, line=dict(color="white", width=2)),
                     text=[_fmt_label(v) for v in d["price"]],
                     textposition=text_pos,
                     textfont=dict(size=12, color=label_color, family="Arial Black, Arial"),
-                    fill="tozeroy" if fill_area else None,
-                    fillcolor="rgba(249,115,22,0.08)" if fill_area else None,
+                    fill="tozeroy",
+                    fillcolor=fill_color,
                     hovertemplate="%{x}<br>" + div_name + ": %{y:,.0f}원<extra></extra>",
                     connectgaps=False,
                 )
             )
     else:
+        division_series["평균가"] = chart_df["price"]
         fig.add_trace(
             go.Bar(
                 x=chart_df["month_label"],
                 y=chart_df["price"],
                 marker_color=bar_colors,
+                marker_line_width=0,
                 name="평균가격",
                 text=[_fmt_label(v) for v in chart_df["price"]],
                 textposition="outside",
@@ -711,84 +728,75 @@ else:
             )
         )
 
-    # 최저가 달 + 현재 달, 두 시점 모두 배경 하이라이트 + 뱃지형 주석으로 강조
+    # 참고용 평균가 기준선
+    anchor_series = division_series.get("소매", next(iter(division_series.values())))
+    avg_price = anchor_series.mean()
+    if pd.notna(avg_price):
+        fig.add_hline(
+            y=avg_price,
+            line_dash="dot",
+            line_color="#c4c4c4",
+            line_width=1.3,
+            annotation_text=f"평균 {avg_price:,.0f}원",
+            annotation_position="right",
+            annotation_font=dict(size=11, color="#9ca3af"),
+        )
+
+    # 최저가 달 + 현재 달을 각각 해당 지점에 화살표 뱃지와 원형 하이라이트로 표시.
+    # 두 시점이 같은 달이어도 화살표가 서로 반대 방향(왼쪽 위 / 오른쪽 위)에서 같은 점을
+    # 가리키게 되므로, 하나로 뭉개지지 않고 두 정보가 모두 또렷하게 보인다.
     pos_in_chart = cheapest_pos
     current_pos = len(chart_df) - 1  # 조회 구간의 마지막 자리 = 항상 "지금"
 
-    fig.add_vrect(
-        x0=pos_in_chart - 0.5,
-        x1=pos_in_chart + 0.5,
-        fillcolor="#22c55e",
-        opacity=0.10,
-        line_width=0,
-    )
-    if current_pos != pos_in_chart:
-        fig.add_vrect(
-            x0=current_pos - 0.5,
-            x1=current_pos + 0.5,
-            fillcolor="#8b5cf6",
-            opacity=0.10,
-            line_width=0,
-        )
+    def _mark_event(pos: int, label: str, color: str, ax: int, ay: int):
+        y_val = anchor_series.iloc[pos]
+        x_val = chart_df["month_label"].iloc[pos]
+        if pd.notna(y_val):
+            fig.add_trace(
+                go.Scatter(
+                    x=[x_val],
+                    y=[y_val],
+                    mode="markers",
+                    marker=dict(size=22, color="rgba(0,0,0,0)", line=dict(color=color, width=3)),
+                    showlegend=False,
+                    hoverinfo="skip",
+                )
+            )
+            fig.add_annotation(
+                x=x_val, y=y_val, xref="x", yref="y",
+                text=label, showarrow=True, arrowhead=2, arrowsize=1, arrowwidth=2,
+                arrowcolor=color, ax=ax, ay=ay,
+                font=dict(size=12, color="white", family="Arial Black, Arial"),
+                bgcolor=color, borderpad=5,
+            )
+        else:
+            fig.add_annotation(
+                x=x_val, y=1.0, xref="x", yref="paper",
+                text=label, showarrow=False, yshift=18,
+                font=dict(size=12, color="white", family="Arial Black, Arial"),
+                bgcolor=color, borderpad=5,
+            )
 
-    if current_pos == pos_in_chart:
-        fig.add_annotation(
-            x=chart_df["month_label"].iloc[pos_in_chart],
-            y=1.0,
-            xref="x",
-            yref="paper",
-            text="최저가 달 · 지금 ▼",
-            showarrow=False,
-            yshift=18,
-            font=dict(size=12, color="white", family="Arial Black, Arial"),
-            bgcolor="#16a34a",
-            bordercolor="#16a34a",
-            borderpad=5,
-        )
-    else:
-        fig.add_annotation(
-            x=chart_df["month_label"].iloc[pos_in_chart],
-            y=1.0,
-            xref="x",
-            yref="paper",
-            text="최저가 달 ▼",
-            showarrow=False,
-            yshift=18,
-            font=dict(size=12, color="white", family="Arial Black, Arial"),
-            bgcolor="#22c55e",
-            bordercolor="#22c55e",
-            borderpad=5,
-        )
-        fig.add_annotation(
-            x=chart_df["month_label"].iloc[current_pos],
-            y=1.0,
-            xref="x",
-            yref="paper",
-            text="지금 ▼",
-            showarrow=False,
-            yshift=18,
-            font=dict(size=12, color="white", family="Arial Black, Arial"),
-            bgcolor="#8b5cf6",
-            bordercolor="#8b5cf6",
-            borderpad=5,
-        )
+    _mark_event(pos_in_chart, "🏆 최저가", "#22c55e", ax=-46, ay=-38)
+    _mark_event(current_pos, "📍 지금", "#8b5cf6", ax=46, ay=-38)
 
     fig.update_layout(
-        height=460,
-        margin=dict(l=20, r=20, t=70, b=20),
+        height=470,
+        margin=dict(l=20, r=30, t=70, b=20),
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Pretendard, -apple-system, sans-serif"),
         legend=dict(
             orientation="h", yanchor="bottom", y=1.1, xanchor="center", x=0.5,
             font=dict(size=13), bgcolor="rgba(0,0,0,0)",
         ),
         yaxis=dict(
-            title=None,
+            title=dict(text="가격 (원)", font=dict(size=11, color="#9ca3af")),
             showgrid=True,
-            gridcolor="#f0f0f0",
+            gridcolor="#f2f2f2",
             gridwidth=1,
             zeroline=False,
-            ticksuffix="원",
+            tickformat=",",
         ),
         xaxis=dict(
             title=None,
