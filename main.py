@@ -71,6 +71,7 @@ DIVISION_LABELS = {"01": "소매", "02": "도매", "03": "친환경", "07": "친
 MAIN_FRUITS = [
     "사과", "배", "복숭아", "포도", "감귤", "단감", "바나나", "참다래",
     "파인애플", "오렌지", "자몽", "레몬", "체리", "망고", "블루베리", "아보카도",
+    "수박", "토마토", "딸기",
 ]
 
 # 대표 이미지 대용 이모지 + 데모(대체) 데이터 생성을 위한 계절성 파라미터
@@ -94,6 +95,8 @@ FRUIT_INFO = {
     "블루베리": {"emoji": "🫐", "base": 6000, "amp": 1800, "cheap_month": 6},
     "아보카도": {"emoji": "🥑", "base": 3300, "amp": 500,  "cheap_month": 9},
     "수박":     {"emoji": "🍉", "base": 22000, "amp": 8000, "cheap_month": 8},
+    "토마토":   {"emoji": "🍅", "base": 3500, "amp": 1200, "cheap_month": 7},
+    "딸기":     {"emoji": "🍓", "base": 9000, "amp": 3500, "cheap_month": 1},
 }
 
 TAGS = [
@@ -110,6 +113,7 @@ FALLBACK_ITEM_CODES = {
     "오렌지": ("400", "421"), "자몽": ("400", "423"), "레몬": ("400", "424"),
     "체리": ("400", "425"), "망고": ("400", "428"), "블루베리": ("400", "429"),
     "아보카도": ("400", "430"), "수박": ("200", "221"),
+    "토마토": ("200", "225"), "딸기": ("200", "226"),
 }
 
 
@@ -177,6 +181,8 @@ PRODUCTION_REGIONS = {
     "블루베리": "전북 고창, 전남 등",
     "아보카도": "수입(멕시코·페루 등)",
     "수박": "충북 음성, 전남 고창, 경북 고령 등",
+    "토마토": "경남 진주, 부산 등",
+    "딸기": "충남 논산, 경남 진주·밀양 등",
 }
 
 
@@ -306,6 +312,42 @@ st.markdown(
     h4, h5, .stMarkdown h4, .stMarkdown h5 {
         color: var(--ink) !important;
         font-weight: 800 !important;
+    }
+    /* 과일 버튼 그리드: 좁은 화면(모바일)에서는 한 줄에 3개씩 접혀서 세로 스크롤을 줄인다 */
+    @media (max-width: 700px) {
+        .st-key-fruit_grid div[data-testid="stHorizontalBlock"] {
+            flex-wrap: wrap;
+            gap: 0.5rem !important;
+        }
+        .st-key-fruit_grid div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+            flex: 1 1 30% !important;
+            width: 30% !important;
+            min-width: 30% !important;
+        }
+        .st-key-fruit_grid .stButton > button {
+            padding: 0.5rem 0.2rem;
+            font-size: 0.85rem;
+        }
+    }
+    /* 가격표 커스텀 HTML 테이블 (가운데 정렬) */
+    .price-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.92rem;
+    }
+    .price-table th, .price-table td {
+        text-align: center;
+        padding: 0.5rem 0.6rem;
+        border-bottom: 1px solid rgba(0,0,0,0.06);
+    }
+    .price-table th {
+        color: var(--muted);
+        font-weight: 700;
+        border-bottom: 2px solid rgba(0,0,0,0.1);
+    }
+    .price-table tr.event-row td {
+        background-color: rgba(255,138,91,0.08);
+        font-weight: 700;
     }
     </style>
     """,
@@ -649,23 +691,25 @@ st.markdown("</div>", unsafe_allow_html=True)
 
 st.write("")
 
-# 과일 버튼 그리드 (4 x 4)
-cols_per_row = 4
-for row_start in range(0, len(MAIN_FRUITS), cols_per_row):
-    row_fruits = MAIN_FRUITS[row_start: row_start + cols_per_row]
-    cols = st.columns(cols_per_row)
-    for col, fruit in zip(cols, row_fruits):
-        with col:
-            emoji = FRUIT_INFO.get(fruit, {}).get("emoji", "🍏")
-            is_selected = fruit == st.session_state.selected_fruit
-            label = f"✓ {emoji} {fruit}" if is_selected else f"{emoji} {fruit}"
-            if st.button(
-                label,
-                key=f"fruit_{fruit}",
-                use_container_width=True,
-                type="primary" if is_selected else "secondary",
-            ):
-                select_fruit(fruit)
+# 과일 버튼 그리드. 데스크톱은 4열이지만, 모바일 폭에서는 CSS로 한 줄에 3개씩 접히도록 해
+# 버튼 19개를 세로로 쭉 스크롤하지 않아도 되게 만든다 (아래 st-key-fruit_grid 미디어쿼리 참고).
+with st.container(key="fruit_grid"):
+    cols_per_row = 4
+    for row_start in range(0, len(MAIN_FRUITS), cols_per_row):
+        row_fruits = MAIN_FRUITS[row_start: row_start + cols_per_row]
+        cols = st.columns(cols_per_row)
+        for col, fruit in zip(cols, row_fruits):
+            with col:
+                emoji = FRUIT_INFO.get(fruit, {}).get("emoji", "🍏")
+                is_selected = fruit == st.session_state.selected_fruit
+                label = f"✓ {emoji} {fruit}" if is_selected else f"{emoji} {fruit}"
+                if st.button(
+                    label,
+                    key=f"fruit_{fruit}",
+                    use_container_width=True,
+                    type="primary" if is_selected else "secondary",
+                ):
+                    select_fruit(fruit)
 
 st.divider()
 
@@ -920,15 +964,17 @@ else:
         bgcolor=CURRENT_COLOR, borderpad=5,
     )
 
+    # 범례를 차트 "아래"로 내려서, 상단은 최저가/지금 뱃지 전용 공간으로 비워둔다.
+    # (좁은 화면에서 범례와 뱃지가 같은 줄에서 겹쳐 보이는 것이 모바일 "깨짐"의 주요 원인이었다.)
     fig.update_layout(
-        height=470,
-        margin=dict(l=20, r=30, t=70, b=20),
+        height=460,
+        margin=dict(l=10, r=10, t=66, b=70),
         plot_bgcolor="rgba(255,255,255,0.35)",
         paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Pretendard, -apple-system, sans-serif"),
+        font=dict(family="Pretendard, -apple-system, sans-serif", size=12),
         legend=dict(
-            orientation="h", yanchor="bottom", y=1.1, xanchor="center", x=0.5,
-            font=dict(size=13), bgcolor="rgba(0,0,0,0)",
+            orientation="h", yanchor="top", y=-0.22, xanchor="center", x=0.5,
+            font=dict(size=12), bgcolor="rgba(0,0,0,0)",
         ),
         yaxis=dict(
             title=dict(text="가격 (원)", font=dict(size=11, color="#9ca3af")),
@@ -937,6 +983,7 @@ else:
             gridwidth=1,
             zeroline=False,
             tickformat=",",
+            automargin=True,
         ),
         xaxis=dict(
             title=None,
@@ -944,12 +991,19 @@ else:
             gridcolor="#f8f8f8",
             showline=True,
             linecolor="#e5e7eb",
+            tickangle=-45,
+            tickfont=dict(size=11),
+            automargin=True,
         ),
         hovermode="x unified",
     )
 
     with st.container(border=True):
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(
+            fig,
+            use_container_width=True,
+            config={"responsive": True, "displayModeBar": False, "scrollZoom": False},
+        )
 
         # --------------------------------------------------------------
         # 월별 가격표 (그래프 검증용, 접어두는 심플한 표)
@@ -982,7 +1036,19 @@ else:
                 table_df[c] = table_df[c].apply(lambda v: f"{v:,.0f}원" if pd.notna(v) else "-")
             table_df = table_df[["연월", *price_cols, "구분"]]
 
-            st.dataframe(table_df, hide_index=True, use_container_width=True)
+            # st.dataframe은 셀 정렬을 세밀하게 제어하기 어려워, 가운데 정렬이 되는
+            # 단순한 HTML 테이블로 직접 그린다.
+            header_html = "".join(f"<th>{html.escape(c)}</th>" for c in table_df.columns)
+            rows_html = []
+            for _, r in table_df.iterrows():
+                row_class = ' class="event-row"' if r["구분"] else ""
+                cells = "".join(f"<td>{html.escape(str(v))}</td>" for v in r)
+                rows_html.append(f"<tr{row_class}>{cells}</tr>")
+            table_html = (
+                f'<table class="price-table"><thead><tr>{header_html}</tr></thead>'
+                f'<tbody>{"".join(rows_html)}</tbody></table>'
+            )
+            st.markdown(table_html, unsafe_allow_html=True)
 
     ctgry_cd, item_cd = ITEM_CODE_LOOKUP.get(selected, ("", ""))
     st.caption(
