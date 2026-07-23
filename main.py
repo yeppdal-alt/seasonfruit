@@ -97,7 +97,7 @@ FRUIT_INFO = {
     "수박":     {"emoji": "🍉", "base": 22000, "amp": 8000, "cheap_month": 8},
     "토마토":   {"emoji": "🍅", "base": 3500, "amp": 1200, "cheap_month": 7},
     "딸기":     {"emoji": "🍓", "base": 9000, "amp": 3500, "cheap_month": 1},
-    "참외":     {"emoji": "🍈", "base": 4200, "amp": 1600, "cheap_month": 6},
+    "참외":     {"emoji": "🍋", "base": 4200, "amp": 1600, "cheap_month": 6},  # 유니코드에 참외 전용 이모지가 없어, 초록빛 멜론(🍈)보다 참외의 노란 타원 형태에 더 가까운 레몬 이모지로 대체
 }
 
 TAGS = [
