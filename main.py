@@ -25,6 +25,7 @@ Price Status Card의 2줄 분석 문구는 Upstage Solar(모델: solar-open2, Op
 """
 
 import html
+import json
 import math
 import os
 import random
@@ -84,7 +85,7 @@ FRUIT_INFO = {
     "참다래":   {"emoji": "🥝", "base": 3800, "amp": 700,  "cheap_month": 12},
     "파인애플": {"emoji": "🍍", "base": 3600, "amp": 500,  "cheap_month": 7},
     "오렌지":   {"emoji": "🍊", "base": 3300, "amp": 700,  "cheap_month": 2},
-    "자몽":     {"emoji": "🍈", "base": 2900, "amp": 600,  "cheap_month": 1},
+    "자몽":     {"emoji": "🍊", "base": 2900, "amp": 600,  "cheap_month": 1},  # 유니코드에 자몽 전용 이모지가 없어 감귤류 이모지로 대체 (멜론 이모지 오류 수정)
     "레몬":     {"emoji": "🍋", "base": 3100, "amp": 500,  "cheap_month": 4},
     "체리":     {"emoji": "🍒", "base": 8500, "amp": 3000, "cheap_month": 6},
     "망고":     {"emoji": "🥭", "base": 5200, "amp": 1500, "cheap_month": 7},
@@ -189,6 +190,12 @@ def _format_rich_text(text: str) -> str:
 st.markdown(
     """
     <style>
+    [data-testid="stAppViewContainer"] {
+        background: linear-gradient(180deg, #fffaf3 0%, #fff3e6 45%, #fdecdc 100%);
+    }
+    [data-testid="stHeader"] {
+        background: rgba(0,0,0,0);
+    }
     .main-copy {
         font-size: 2.1rem;
         font-weight: 800;
@@ -217,18 +224,18 @@ st.markdown(
         border-color: #ffb37a;
     }
     .tag-row .stButton > button {
-        border-radius: 999px;
-        font-size: 0.78rem;
-        padding: 0.3rem 0.8rem;
-        background-color: #ffe9d6;
+        border: none;
+        background-color: transparent;
+        box-shadow: none;
+        font-size: 0.82rem;
+        padding: 0.2rem 0.5rem;
         color: #b45309;
-        border: 1px solid #ffd8b0;
-        font-weight: 600;
+        font-weight: 700;
     }
     .tag-row .stButton > button:hover {
-        background-color: #ffd8b0;
+        background-color: transparent;
         color: #7c2d12;
-        border-color: #ffc794;
+        text-decoration: underline;
     }
     .status-card {
         border-radius: 24px;
@@ -478,6 +485,61 @@ def generate_price_commentary(
         return None
 
 
+@st.cache_data(ttl=86400, show_spinner=False)
+def generate_polished_copy(
+    main_copy: str, sub_copy: str, tag1: str, tag2: str, tag3: str, source_note: str
+) -> dict | None:
+    """Solar(solar-open2)로 페이지 제목/소제목/해시태그/출처 문구를 신뢰감 있게 다듬는다.
+
+    실패하면 None을 반환하고, 호출부에서 원래 문구를 그대로 사용한다. 하루 단위로만
+    다시 생성하도록 캐싱해 불필요한 API 호출을 피한다.
+    """
+    try:
+        api_key = st.secrets["SOLAR_API_KEY"]
+    except Exception:
+        return None
+    if OpenAI is None:
+        return None
+
+    try:
+        client = OpenAI(api_key=api_key, base_url=SOLAR_BASE_URL)
+        payload = {
+            "main_copy": main_copy,
+            "sub_copy": sub_copy,
+            "tag1": tag1,
+            "tag2": tag2,
+            "tag3": tag3,
+            "source_note": source_note,
+        }
+        prompt = (
+            "너는 과일 가격 정보 웹앱의 카피라이터야. 아래 JSON에 담긴 UI 문구들을 "
+            "의미와 정보량은 그대로 유지하면서, 더 신뢰감 있고 자연스러운 한국어 문장으로 "
+            "다듬어줘. main_copy와 sub_copy는 한 줄 문장이어야 하고, tag1~tag3는 "
+            "'#'로 시작하고 단어 사이는 '_'로 잇는 해시태그 형식을 유지해야 해. "
+            "source_note는 데이터 출처를 설명하는 짧은 문구야. "
+            "다른 설명 없이 동일한 키를 가진 JSON 객체 하나만 출력해.\n\n"
+            f"{json.dumps(payload, ensure_ascii=False)}"
+        )
+        resp = client.chat.completions.create(
+            model=SOLAR_MODEL,
+            reasoning_effort="none",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = resp.choices[0].message.content or ""
+        match = re.search(r"\{.*\}", text, re.S)
+        if not match:
+            return None
+        data = json.loads(match.group(0))
+        required_keys = {"main_copy", "sub_copy", "tag1", "tag2", "tag3", "source_note"}
+        if not required_keys.issubset(data.keys()):
+            return None
+        if not all(isinstance(data[k], str) and data[k].strip() for k in required_keys):
+            return None
+        return data
+    except Exception:
+        return None
+
+
 def _chronological_monthly(series: pd.DataFrame, start_ym: str, end_ym: str) -> pd.DataFrame:
     """year+month로 집계한 뒤, 실제 달력 순서(연도 경계를 넘어가도 올바르게)로 정렬한다.
 
@@ -522,16 +584,34 @@ def cheapest_fruit_this_month(start_ym: str, end_ym: str) -> str:
 
 
 # ----------------------------------------------------------------------------
-# 상단: 메인 카피 + 태그
+# 상단: 메인 카피 + 태그 (Solar가 문구를 다듬어주고, 실패 시 기본 문구 사용)
 # ----------------------------------------------------------------------------
-st.markdown('<div class="main-copy">좋아하는 과일, 언제 사야 가장 싸고 맛있을까?</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-copy">아래에서 과일을 골라보세요. 연간 가격 추이로 최적의 구매 시기를 알려드려요.</div>', unsafe_allow_html=True)
+DEFAULT_MAIN_COPY = "좋아하는 과일, 언제 사야 가장 싸고 맛있을까?"
+DEFAULT_SUB_COPY = "아래에서 과일을 골라보세요. 연간 가격 추이로 최적의 구매 시기를 알려드려요."
+DEFAULT_TAG_LABELS = ["#지금_가장_싼_과일", "#7월_제철_복숭아", "#수박_최저가"]
+DEFAULT_SOURCE_NOTE = "출처: 한국농수산식품유통공사 연월별 도,소매가격정보"
+
+_polished = generate_polished_copy(
+    DEFAULT_MAIN_COPY, DEFAULT_SUB_COPY, *DEFAULT_TAG_LABELS, DEFAULT_SOURCE_NOTE
+)
+if _polished:
+    MAIN_COPY = _polished["main_copy"]
+    SUB_COPY = _polished["sub_copy"]
+    TAG_LABELS = [_polished["tag1"], _polished["tag2"], _polished["tag3"]]
+    SOURCE_NOTE = _polished["source_note"]
+else:
+    MAIN_COPY, SUB_COPY, TAG_LABELS, SOURCE_NOTE = (
+        DEFAULT_MAIN_COPY, DEFAULT_SUB_COPY, DEFAULT_TAG_LABELS, DEFAULT_SOURCE_NOTE
+    )
+
+st.markdown(f'<div class="main-copy">{html.escape(MAIN_COPY)}</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="sub-copy">{html.escape(SUB_COPY)}</div>', unsafe_allow_html=True)
 
 st.markdown('<div class="tag-row">', unsafe_allow_html=True)
 tag_cols = st.columns(len(TAGS) + 6)
-for i, (label, target) in enumerate(TAGS):
+for i, (_, target) in enumerate(TAGS):
     with tag_cols[i]:
-        if st.button(label, key=f"tag_{i}"):
+        if st.button(TAG_LABELS[i], key=f"tag_{i}"):
             if target == "__CHEAPEST_NOW__":
                 select_fruit(cheapest_fruit_this_month(START_YM, END_YM))
             else:
@@ -847,6 +927,6 @@ else:
     st.caption(
         f"데이터 기간: {START_YM[:4]}.{START_YM[4:]} ~ {END_YM[:4]}.{END_YM[4:]}  ·  "
         f"부류코드 {ctgry_cd} / 품목코드 {item_cd}  ·  "
-        f"출처: 한국농수산식품유통공사 연월별 도,소매가격정보"
+        f"{SOURCE_NOTE}"
         + ("" if is_live else " (데모 데이터)")
     )
