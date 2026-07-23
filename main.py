@@ -771,6 +771,7 @@ def generate_price_commentary(
     cur_price: float,
     position_pct: float,
     light_label: str,
+    price_basis_label: str = "평균가",
 ) -> str | None:
     """Solar(solar-open2)로 가격 상태에 대한 2줄 이내 자연어 분석을 생성한다.
 
@@ -793,7 +794,7 @@ def generate_price_commentary(
             f"불릿 기호나 따옴표 없이 문장만 출력해.\n\n"
             f"- 과일: {fruit}\n"
             f"- 최근 1년 중 가장 저렴한 달: {cheapest_year}년 {cheapest_month}월\n"
-            f"- 가장 최근 집계월: {latest_year}년 {latest_month}월, 평균가 약 {cur_price:,.0f}원\n"
+            f"- 가장 최근 집계월: {latest_year}년 {latest_month}월, {price_basis_label} 약 {cur_price:,.0f}원\n"
             f"- 현재 가격은 연중 가격대의 {position_pct:.0f}% 지점이며 상태는 '{light_label}'\n\n"
             f"첫 줄에는 가장 저렴한 달 정보를, 둘째 줄에는 지금 사도 될지에 대한 조언을 담아줘."
         )
@@ -916,6 +917,28 @@ def generate_smart_buying_tips(fruit: str, varieties: tuple, regions: str) -> di
         return None
 
 
+def _primary_division_frame(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
+    """분석(최저가 달·현재가·다른 과일과의 비교)에 쓸 "단일 기준" 구분의 행만 골라낸다.
+
+    소매/도매는 조사 단위가 서로 다를 수 있다(예: 망고는 소매가 "개당", 도매가 "5kg당").
+    이 둘을 그대로 평균 내면 물리적으로 다른 두 값을 섞어 의미 없는 숫자가 나온다.
+    소비자가 실제로 지불하는 가격인 소매를 우선 기준으로 삼고, 소매가 없으면 도매,
+    그마저 없으면 있는 구분(친환경 등) 그대로 사용한다. (그래프에 표시되는 소매·도매
+    두 선은 그대로 유지되며, 이 함수는 "지금 사기 좋은 때인가"를 판단하는 상태 카드용
+    단일 기준값에만 영향을 준다.)
+
+    반환값: (해당 구분만 걸러낸 DataFrame, 그 구분의 한국어 라벨)
+    """
+    if df.empty:
+        return df, "가격"
+    divs = df["division"].unique().tolist()
+    if "소매" in divs:
+        return df[df["division"] == "소매"], "소매가"
+    if "도매" in divs:
+        return df[df["division"] == "도매"], "도매가"
+    return df, f"{divs[0]}가" if divs else "가격"
+
+
 def _chronological_monthly(series: pd.DataFrame, start_ym: str, end_ym: str) -> pd.DataFrame:
     """year+month로 집계한 뒤, 실제 달력 순서(연도 경계를 넘어가도 올바르게)로 정렬한다.
 
@@ -946,7 +969,8 @@ def cheapest_fruit_this_month(start_ym: str, end_ym: str) -> str:
         series, _, _ = fetch_fruit_series(f, start_ym, end_ym)
         if series.empty:
             continue
-        monthly = _chronological_monthly(series, start_ym, end_ym)
+        primary_series, _ = _primary_division_frame(series)
+        monthly = _chronological_monthly(primary_series, start_ym, end_ym)
         latest = _latest_with_data(monthly)
         if latest is None:
             continue
@@ -1054,7 +1078,8 @@ if not is_live:
             "키 자체 문제인지 이 품목의 데이터가 원래 없는 것인지 바로 구분할 수 있어요."
         )
 
-overall_monthly = None if fruit_df.empty else _chronological_monthly(fruit_df, START_YM, END_YM)
+_primary_df, price_basis_label = _primary_division_frame(fruit_df)
+overall_monthly = None if fruit_df.empty else _chronological_monthly(_primary_df, START_YM, END_YM)
 latest = None if overall_monthly is None else _latest_with_data(overall_monthly)
 
 if fruit_df.empty or latest is None:
@@ -1119,10 +1144,11 @@ else:
             cur_price=cur_price,
             position_pct=position * 100,
             light_label=light_label,
+            price_basis_label=price_basis_label,
         )
         analysis_text = ai_commentary or (
             f"최근 1년 데이터 기준 **{cheapest_year}년 {cheapest_month}월**에 가격이 가장 낮아지는 경향이 있어요.\n"
-            f"가장 최근 집계된 **{latest_year}년 {latest_month}월** 평균가는 약 **{cur_price:,.0f}원**이에요."
+            f"가장 최근 집계된 **{latest_year}년 {latest_month}월** {price_basis_label}는 약 **{cur_price:,.0f}원**이에요."
         )
 
     sel_ctgry_cd, sel_item_cd = ITEM_CODE_LOOKUP.get(selected, ("", ""))
