@@ -923,6 +923,7 @@ else:
                     fillcolor=fill_color,
                     hovertemplate="%{x}<br>" + div_name + ": %{y:,.0f}원<extra></extra>",
                     connectgaps=False,
+                    cliponaxis=False,  # 좌우 여백을 0에 가깝게 줄여도 양끝 값 라벨이 잘리지 않도록
                 )
             )
     else:
@@ -945,14 +946,17 @@ else:
     anchor_series = division_series.get("소매", next(iter(division_series.values())))
     avg_price = anchor_series.mean()
     if pd.notna(avg_price):
+        # annotation_position="right"로 두면 플롯 바깥(오른쪽 여백)에 라벨을 그리기 위해
+        # 여백이 그대로 남아있었다. 축 숫자를 지운 만큼 여백도 함께 줄어들도록, 라벨을
+        # 플롯 "안쪽" 왼쪽 위에 얹는 방식으로 바꿔 오른쪽 여백을 그래프에 되돌려준다.
         fig.add_hline(
             y=avg_price,
             line_dash="dot",
             line_color="#c4c4c4",
             line_width=1.3,
             annotation_text=f"평균 {avg_price:,.0f}원",
-            annotation_position="right",
-            annotation_font=dict(size=11, color="#9ca3af"),
+            annotation_position="top left",
+            annotation_font=dict(size=10, color="#9ca3af"),
         )
 
     # 최저가 달은 은은한 배경 하이라이트(면), 현재 달은 또렷한 점선 박스(테두리)로 서로 다른
@@ -997,7 +1001,9 @@ else:
     # (좁은 화면에서 범례와 뱃지가 같은 줄에서 겹쳐 보이는 것이 모바일 "깨짐"의 주요 원인이었다.)
     fig.update_layout(
         height=460,
-        margin=dict(l=10, r=10, t=66, b=70),
+        # y축 눈금/숫자와 평균가 라벨의 바깥 여백을 없앤 만큼, 좌우 여백도 최소로 줄여
+        # 그래프(선/막대)가 카드 너비를 실제로 더 넓게 채우도록 한다.
+        margin=dict(l=0, r=0, t=56, b=60),
         plot_bgcolor="rgba(255,255,255,0.35)",
         paper_bgcolor="rgba(0,0,0,0)",
         font=dict(family="Pretendard, -apple-system, sans-serif", size=12),
