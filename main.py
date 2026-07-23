@@ -655,28 +655,48 @@ else:
     chart_df["month_label"] = month_labels
     bar_colors = ["#22c55e" if i == cheapest_pos else "#ffb37a" for i in range(len(chart_df))]
 
+    def _fmt_label(v) -> str:
+        if v is None or (isinstance(v, float) and math.isnan(v)):
+            return ""
+        if v >= 10000:
+            return f"{v / 10000:.1f}만"
+        return f"{v / 1000:.1f}천"
+
     fig = go.Figure()
 
     divisions = fruit_df["division"].unique().tolist()
     if "소매" in divisions or "도매" in divisions:
-        for div_name, color in [("소매", "#f97316"), ("도매", "#60a5fa")]:
-            if div_name in divisions:
-                d = _chronological_monthly(
-                    fruit_df[fruit_df["division"] == div_name], START_YM, END_YM
+        # 소매(위쪽 값표시) / 도매(아래쪽 값표시)를 부드러운 곡선 + 화이트링 마커 + 값 라벨로 표현
+        line_specs = [
+            ("소매", "#f97316", "#9a3412", "top center", True),
+            ("도매", "#60a5fa", "#1e40af", "bottom center", False),
+        ]
+        for div_name, color, label_color, text_pos, fill_area in line_specs:
+            if div_name not in divisions:
+                continue
+            d = _chronological_monthly(
+                fruit_df[fruit_df["division"] == div_name], START_YM, END_YM
+            )
+            d = d.set_index(["year", "month"]).reindex(
+                list(zip(chart_df["year"], chart_df["month"]))
+            ).reset_index()
+            fig.add_trace(
+                go.Scatter(
+                    x=chart_df["month_label"],
+                    y=d["price"],
+                    mode="lines+markers+text",
+                    name=div_name,
+                    line=dict(color=color, width=4, shape="spline", smoothing=0.35),
+                    marker=dict(size=9, color=color, line=dict(color="white", width=2)),
+                    text=[_fmt_label(v) for v in d["price"]],
+                    textposition=text_pos,
+                    textfont=dict(size=12, color=label_color, family="Arial Black, Arial"),
+                    fill="tozeroy" if fill_area else None,
+                    fillcolor="rgba(249,115,22,0.08)" if fill_area else None,
+                    hovertemplate="%{x}<br>" + div_name + ": %{y:,.0f}원<extra></extra>",
+                    connectgaps=False,
                 )
-                d = d.set_index(["year", "month"]).reindex(
-                    list(zip(chart_df["year"], chart_df["month"]))
-                ).reset_index()
-                fig.add_trace(
-                    go.Scatter(
-                        x=chart_df["month_label"],
-                        y=d["price"],
-                        mode="lines+markers",
-                        name=div_name,
-                        line=dict(color=color, width=3),
-                        marker=dict(size=7),
-                    )
-                )
+            )
     else:
         fig.add_trace(
             go.Bar(
@@ -684,29 +704,60 @@ else:
                 y=chart_df["price"],
                 marker_color=bar_colors,
                 name="평균가격",
+                text=[_fmt_label(v) for v in chart_df["price"]],
+                textposition="outside",
+                textfont=dict(size=12, color="#5c3a21", family="Arial Black, Arial"),
+                hovertemplate="%{x}<br>평균가: %{y:,.0f}원<extra></extra>",
             )
         )
 
-    # 최저가 달 배경 하이라이트 (달력 순서 기준 위치를 그대로 사용)
+    # 최저가 달 배경 하이라이트 + 뱃지형 주석 (달력 순서 기준 위치를 그대로 사용)
     pos_in_chart = cheapest_pos
     fig.add_vrect(
         x0=pos_in_chart - 0.5,
         x1=pos_in_chart + 0.5,
         fillcolor="#22c55e",
-        opacity=0.12,
+        opacity=0.10,
         line_width=0,
-        annotation_text="최저가 달",
-        annotation_position="top",
+    )
+    fig.add_annotation(
+        x=chart_df["month_label"].iloc[pos_in_chart],
+        y=1.0,
+        xref="x",
+        yref="paper",
+        text="최저가 달 ▼",
+        showarrow=False,
+        yshift=18,
+        font=dict(size=12, color="white", family="Arial Black, Arial"),
+        bgcolor="#22c55e",
+        bordercolor="#22c55e",
+        borderpad=5,
     )
 
     fig.update_layout(
-        height=420,
-        margin=dict(l=20, r=20, t=40, b=20),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        yaxis_title="원 (kg 등 품목별 기준 단위)",
-        xaxis_title=None,
+        height=460,
+        margin=dict(l=20, r=20, t=70, b=20),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        legend=dict(
+            orientation="h", yanchor="bottom", y=1.1, xanchor="center", x=0.5,
+            font=dict(size=13), bgcolor="rgba(0,0,0,0)",
+        ),
+        yaxis=dict(
+            title=None,
+            showgrid=True,
+            gridcolor="#f0f0f0",
+            gridwidth=1,
+            zeroline=False,
+            ticksuffix="원",
+        ),
+        xaxis=dict(
+            title=None,
+            showgrid=False,
+            showline=True,
+            linecolor="#e5e7eb",
+        ),
+        hovermode="x unified",
     )
 
     st.plotly_chart(fig, use_container_width=True)
