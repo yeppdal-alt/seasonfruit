@@ -471,6 +471,26 @@ st.markdown(
             min-width: 100% !important;
         }
     }
+    /* 가격 추이 그래프(Plotly)는 폰트 크기가 Python 쪽에서 픽셀 단위로 고정되어 있어,
+       좁은 화면에서는 라벨끼리 겹쳐 보인다. Plotly는 SVG로 렌더링되고 글자 크기가
+       인라인 style로 박혀 있는데, 외부 스타일시트의 !important는 CSS 명세상 일반
+       인라인 style보다 우선하므로 아래 규칙으로 미디어쿼리에 따라 강제로 축소할 수 있다. */
+    @media (max-width: 600px) {
+        .js-plotly-plot .xtick text,
+        .js-plotly-plot .ytick text {
+            font-size: 8px !important;
+        }
+        .js-plotly-plot .legendtext {
+            font-size: 9px !important;
+        }
+        .js-plotly-plot .scatterlayer text,
+        .js-plotly-plot .barlayer text {
+            font-size: 9px !important;
+        }
+        .js-plotly-plot .annotation-text {
+            font-size: 10px !important;
+        }
+    }
     </style>
     """,
     unsafe_allow_html=True,
