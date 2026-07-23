@@ -153,7 +153,7 @@ st.markdown(
 left, right = st.columns([1, 2], gap="medium")
 
 with left:
-    st.markdown("**자주 묻는 질문**")
+    st.markdown("**🍉 알고 사면 더 맛있다**")
     with st.container(key="preset_list"):
         for i, q in enumerate(PRESET_QUESTIONS):
             st.button(
