@@ -1114,7 +1114,6 @@ else:
         month_labels.append(f"{y}년 {m}월" if y != prev_year else f"{m}월")
         prev_year = y
     chart_df["month_label"] = month_labels
-    bar_colors = ["#22c55e" if i == cheapest_pos else "#f2938a" for i in range(len(chart_df))]
 
     fig = go.Figure()
     division_series = {}  # 이벤트(최저가/지금) 주석의 y좌표 앵커로 재사용
@@ -1148,15 +1147,22 @@ else:
                 )
             )
     else:
-        division_series["평균가"] = chart_df["price"]
+        # 블루베리·자몽처럼 유통량이 적은 품목은 실제 API 데이터에 소매/도매 구분 없이
+        # "친환경" 등 단일 구분만 존재하는 경우가 있다(도매가 실제로 없는 것이지, 코드
+        # 오류로 소매/도매를 놓친 게 아니다). 이 경우에도 다른 과일과 같은 얇은 선 +
+        # 속 빈 마커 스타일을 그대로 써서 그래프 형식이 갑자기 막대로 바뀌지 않게 한다.
+        series_label = divisions[0] if len(divisions) == 1 else "평균가"
+        division_series[series_label] = chart_df["price"]
         fig.add_trace(
-            go.Bar(
+            go.Scatter(
                 x=chart_df["month_label"],
                 y=chart_df["price"],
-                marker_color=bar_colors,
-                marker_line_width=0,
-                name="평균가격",
-                hovertemplate="%{x}<br>평균가: %{y:,.0f}원<extra></extra>",
+                mode="lines+markers",
+                name=series_label,
+                line=dict(color="#f2938a", width=2.2),
+                marker=dict(size=8, color="#ffffff", line=dict(color="#f2938a", width=2)),
+                hovertemplate="%{x}<br>" + series_label + ": %{y:,.0f}원<extra></extra>",
+                connectgaps=False,
             )
         )
 
@@ -1238,6 +1244,11 @@ else:
             use_container_width=True,
             config={"responsive": True, "displayModeBar": False, "scrollZoom": False},
         )
+        if not ("소매" in divisions or "도매" in divisions):
+            st.caption(
+                "이 과일은 유통량이 적어 소매/도매 구분 없이 단일 가격으로만 조사돼요. "
+                "그래서 다른 과일과 달리 소매·도매 두 선이 아니라 한 선(평균가)만 표시돼요."
+            )
 
         # --------------------------------------------------------------
         # 월별 가격표 (그래프 검증용, 접어두는 심플한 표)
@@ -1276,7 +1287,9 @@ else:
                         table_df[col_name] = d["price"]
                         div_col_names[div_name] = col_name
             else:
-                table_df["평균가"] = chart_df["price"]
+                # 소매/도매 구분이 없는 품목(친환경만 있는 경우 등)은 실제 구분명을 그대로 쓴다.
+                series_label = divisions[0] if len(divisions) == 1 else "평균가"
+                table_df[series_label] = chart_df["price"]
 
             mark = [""] * len(table_df)
             if current_pos == pos_in_chart:
