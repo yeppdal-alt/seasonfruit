@@ -234,13 +234,20 @@ st.markdown(
     """
     <style>
     :root {
-        --accent: #ff8a5b;
-        --accent-dark: #e8703f;
-        --ink: #171412;
-        --muted: #8c8078;
+        /* 참고 이미지(핀테크 앱)의 톤앤매너: 화이트 카드 + 은은한 핑크 배경 + 살몬 코럴 포인트 */
+        --accent: #f2938a;
+        --accent-dark: #e0665a;
+        --ink: #241f2b;
+        --muted: #9b93a3;
+        --chip-mint: #c8f2e3;
+        --chip-mint-ink: #1f9a72;
+        --chip-lavender: #ded6fb;
+        --chip-lavender-ink: #7a68d8;
+        --chip-orange: #ffe0bd;
+        --chip-orange-ink: #e08a2e;
     }
     [data-testid="stAppViewContainer"] {
-        background: linear-gradient(135deg, #fdf1d8 0%, #fbdcc9 45%, #f8c7cf 100%);
+        background: linear-gradient(180deg, #fdf1f0 0%, #fbe8e6 100%);
     }
     [data-testid="stHeader"] {
         background: rgba(0,0,0,0);
@@ -259,32 +266,32 @@ st.markdown(
         margin-bottom: 1.4rem;
         font-size: 1rem;
     }
-    /* 기본(선택되지 않은) 버튼: 화이트 필, 블랙 텍스트 — 온보딩 카드의 리스트 옵션과 동일한 톤 */
+    /* 기본(선택되지 않은) 버튼: 화이트 필, 다크 네이비 텍스트 — 참고 이미지의 화이트 카드 톤 */
     .stButton > button {
         border-radius: 999px;
-        border: 1px solid rgba(23,20,18,0.08);
+        border: 1px solid rgba(36,31,43,0.06);
         background-color: #ffffff;
         color: var(--ink);
         font-weight: 600;
         padding: 0.6rem 0.4rem;
-        box-shadow: 0 2px 8px rgba(23,20,18,0.05);
+        box-shadow: 0 4px 14px rgba(36,31,43,0.06);
         transition: all 0.15s ease-in-out;
     }
     .stButton > button:hover {
         border-color: var(--accent);
         color: var(--accent-dark);
     }
-    /* 선택된(primary) 버튼: 코럴 그라디언트 필 + 화이트 텍스트 */
+    /* 선택된(primary) 버튼: 참고 이미지의 "Get Started" 버튼처럼 단색 살몬 필 + 화이트 텍스트 */
     .stButton > button[kind="primary"] {
         border-radius: 999px;
         border: none;
-        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+        background: var(--accent);
         color: #ffffff;
         font-weight: 700;
-        box-shadow: 0 6px 16px rgba(232,112,63,0.35);
+        box-shadow: 0 8px 18px rgba(242,147,138,0.4);
     }
     .stButton > button[kind="primary"]:hover {
-        filter: brightness(1.05);
+        background: var(--accent-dark);
         color: #ffffff;
     }
     /* 해시태그는 버튼이 아니라 클릭 가능한 작은 글자로 보이도록 버튼 모양을 전부 제거한다.
@@ -321,22 +328,22 @@ st.markdown(
         text-decoration: underline;
     }
     .status-card {
-        border-radius: 24px;
+        border-radius: 28px;
         min-height: 260px;
         padding: 2.2rem 2.4rem;
         display: flex;
         align-items: center;
         gap: 1.8rem;
-        background: rgba(255, 255, 255, 0.72);
-        border: 1px solid rgba(255,255,255,0.9);
-        box-shadow: 0 10px 26px rgba(232, 112, 63, 0.16);
+        background: #ffffff;
+        border: none;
+        box-shadow: 0 12px 28px rgba(36, 31, 43, 0.08);
         margin-bottom: 1rem;
     }
     .status-card .emoji {
         font-size: 5.5rem;
         line-height: 1;
         flex-shrink: 0;
-        filter: drop-shadow(0 6px 10px rgba(232,112,63,0.25));
+        filter: drop-shadow(0 6px 10px rgba(36,31,43,0.12));
     }
     .status-card .title {
         font-size: 1.6rem;
@@ -432,24 +439,34 @@ st.markdown(
         border-bottom: 2px solid rgba(0,0,0,0.1);
     }
     .price-table tr.event-row td {
-        background-color: rgba(255,138,91,0.08);
+        background-color: rgba(242,147,138,0.1);
         font-weight: 700;
     }
-    /* 스마트 구매팁 카드 */
+    /* 스마트 구매팁 카드: 참고 이미지의 컬러풀한 카테고리 타일처럼, 카드마다 다른
+       파스텔 색 아이콘 뱃지를 얹는다 (민트/라벤더/오렌지). */
     .tip-card {
-        background: rgba(255, 255, 255, 0.72);
-        border: 1px solid rgba(255,255,255,0.9);
-        border-radius: 20px;
+        background: #ffffff;
+        border: none;
+        border-radius: 22px;
         padding: 1.2rem 1.3rem;
         height: 100%;
         min-height: 172px;
-        box-shadow: 0 8px 20px rgba(232,112,63,0.12);
+        box-shadow: 0 10px 22px rgba(36,31,43,0.07);
         margin-bottom: 0.6rem;
     }
     .tip-card-emoji {
-        font-size: 1.6rem;
-        margin-bottom: 0.35rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.4rem;
+        height: 2.4rem;
+        border-radius: 50%;
+        font-size: 1.25rem;
+        margin-bottom: 0.55rem;
     }
+    .tip-card-emoji.mint { background: var(--chip-mint); }
+    .tip-card-emoji.lavender { background: var(--chip-lavender); }
+    .tip-card-emoji.orange { background: var(--chip-orange); }
     .tip-card-title {
         font-weight: 800;
         font-size: 1.02rem;
@@ -1031,7 +1048,7 @@ else:
         month_labels.append(f"{y}년 {m}월" if y != prev_year else f"{m}월")
         prev_year = y
     chart_df["month_label"] = month_labels
-    bar_colors = ["#22c55e" if i == cheapest_pos else "#ff8a5b" for i in range(len(chart_df))]
+    bar_colors = ["#22c55e" if i == cheapest_pos else "#f2938a" for i in range(len(chart_df))]
 
     fig = go.Figure()
     division_series = {}  # 이벤트(최저가/지금) 주석의 y좌표 앵커로 재사용
@@ -1040,7 +1057,7 @@ else:
     # 얇은 선 + 속이 빈(hollow) 원형 마커만 남긴다. 정확한 가격은 hover 툴팁으로 확인.
     divisions = fruit_df["division"].unique().tolist()
     if "소매" in divisions or "도매" in divisions:
-        line_specs = [("소매", "#ff8a5b"), ("도매", "#57534e")]
+        line_specs = [("소매", "#f2938a"), ("도매", "#57534e")]
         for div_name, color in line_specs:
             if div_name not in divisions:
                 continue
@@ -1227,17 +1244,17 @@ else:
         channel_tip = CHANNEL_TIP_DEFAULT_TEMPLATE.format(regions=regions_for_tip)
 
     tip_cards = [
-        ("🌱", "품종별 구매팁", variety_tip),
-        ("👀", "좋은 과일 고르는 법", selection_tip),
-        ("🏪", "구매 채널 안내", channel_tip),
+        ("🌱", "mint", "품종별 구매팁", variety_tip),
+        ("👀", "lavender", "좋은 과일 고르는 법", selection_tip),
+        ("🏪", "orange", "구매 채널 안내", channel_tip),
     ]
     with st.container(key="tip_cards"):
         tip_cols = st.columns(3)
-        for col, (emoji, title, text) in zip(tip_cols, tip_cards):
+        for col, (emoji, chip, title, text) in zip(tip_cols, tip_cards):
             with col:
                 st.markdown(
                     f'<div class="tip-card">'
-                    f'<div class="tip-card-emoji">{emoji}</div>'
+                    f'<div class="tip-card-emoji {chip}">{emoji}</div>'
                     f'<div class="tip-card-title">{html.escape(title)}</div>'
                     f'<div class="tip-card-text">{_format_rich_text(text)}</div>'
                     f"</div>",
