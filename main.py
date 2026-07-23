@@ -62,8 +62,10 @@ FRUIT_CATEGORY_CODE = "400"  # 부류코드 400번대 = 과일류
 SOLAR_BASE_URL = "https://api.upstage.ai/v1"
 SOLAR_MODEL = "solar-open2"  # 모델명 그대로 사용
 
-# se_cd(구분코드): 01 소매, 02 중도매, 03/07 친환경농산물 — 이 앱에서는 01→소매, 02→도매로 표시
-DIVISION_LABELS = {"01": "소매", "02": "도매"}
+# se_cd(구분코드): 01 소매, 02 중도매, 03/07 친환경농산물 — 01→소매, 02→도매로 표시.
+# 자몽·블루베리처럼 유통량이 적어 01/02 데이터가 비어 있는 품목도 있을 수 있어, 03/07(친환경)도
+# 함께 인식해 두면 "도매/소매 구분"은 없어도 평균가 그래프(막대)로는 표시할 수 있다.
+DIVISION_LABELS = {"01": "소매", "02": "도매", "03": "친환경", "07": "친환경"}
 
 # 화면 상단 큰 버튼에 노출할 16개 과일 (요청 순서 그대로)
 MAIN_FRUITS = [
@@ -80,7 +82,7 @@ FRUIT_INFO = {
     "복숭아":   {"emoji": "🍑", "base": 4200, "amp": 1600, "cheap_month": 8},
     "포도":     {"emoji": "🍇", "base": 4500, "amp": 1400, "cheap_month": 9},
     "감귤":     {"emoji": "🍊", "base": 2600, "amp": 900,  "cheap_month": 1},
-    "단감":     {"emoji": "🟠", "base": 3400, "amp": 900,  "cheap_month": 11},
+    "단감":     {"emoji": "🍊", "base": 3400, "amp": 900,  "cheap_month": 11},  # 유니코드에 감(persimmon) 전용 이모지가 없어 둥근 주황색 과일 이모지로 대체 (보름달처럼 보이던 원형 이모지 수정)
     "바나나":   {"emoji": "🍌", "base": 2200, "amp": 300,  "cheap_month": 6},
     "참다래":   {"emoji": "🥝", "base": 3800, "amp": 700,  "cheap_month": 12},
     "파인애플": {"emoji": "🍍", "base": 3600, "amp": 500,  "cheap_month": 7},
@@ -700,32 +702,56 @@ else:
     latest_year = int(latest["year"])
     cur_price = latest["price"]
 
+    # 최신 데이터가 "지금"으로부터 몇 달이나 떨어져 있는지 확인한다. 감(단감)처럼 특정 시기에만
+    # 유통되는 품목은 출하기가 끝나면 몇 달씩 가격 데이터 자체가 없는데, 그 마지막 데이터(주로
+    # 출하기=저렴한 시기)만 보고 "지금이 사기 좋은 때"라고 판단하면 실제로는 유통이 끊긴 비수기를
+    # 저가 시즌으로 잘못 안내하게 된다. 이를 막기 위해 최신 데이터와 "지금" 사이 격차가 크면
+    # 별도의 "출하 시기 아님" 상태로 전환한다.
+    STALE_GAP_THRESHOLD = 2  # 이만큼(개월) 이상 최신 데이터가 없으면 비수기로 간주
+    latest_pos = int(latest.name)
+    current_pos_ref = len(overall_monthly) - 1
+    gap_months = current_pos_ref - latest_pos
+    is_stale = gap_months >= STALE_GAP_THRESHOLD
+
     span = max(year_max - year_min, 1e-6)
     position = (cur_price - year_min) / span  # 0(가장 쌈) ~ 1(가장 비쌈)
 
-    if position <= 0.33:
+    if is_stale:
+        light_color, light_label = "#9ca3af", "지금은 출하 시기가 아니에요"
+        status_suffix = f"(최신 데이터: {latest_year}년 {latest_month}월 기준)"
+    elif position <= 0.33:
         light_color, light_label = "#22c55e", "지금이 딱 사기 좋은 때예요"
+        status_suffix = f"(최근 데이터 기준 연중 가격대의 {position*100:.0f}% 지점)"
     elif position <= 0.66:
         light_color, light_label = "#eab308", "보통 가격대예요"
+        status_suffix = f"(최근 데이터 기준 연중 가격대의 {position*100:.0f}% 지점)"
     else:
         light_color, light_label = "#ef4444", "지금은 비싼 편이에요"
+        status_suffix = f"(최근 데이터 기준 연중 가격대의 {position*100:.0f}% 지점)"
 
     emoji = FRUIT_INFO.get(selected, {}).get("emoji", "🍏")
 
-    ai_commentary = generate_price_commentary(
-        fruit=selected,
-        cheapest_year=cheapest_year,
-        cheapest_month=cheapest_month,
-        latest_year=latest_year,
-        latest_month=latest_month,
-        cur_price=cur_price,
-        position_pct=position * 100,
-        light_label=light_label,
-    )
-    analysis_text = ai_commentary or (
-        f"최근 1년 데이터 기준 **{cheapest_year}년 {cheapest_month}월**에 가격이 가장 낮아지는 경향이 있어요.\n"
-        f"가장 최근 집계된 **{latest_year}년 {latest_month}월** 평균가는 약 **{cur_price:,.0f}원**이에요."
-    )
+    if is_stale:
+        # 비수기에는 신뢰도를 위해 AI 문구 대신 사실 관계가 확실한 고정 안내문을 사용한다.
+        analysis_text = (
+            f"**{latest_year}년 {latest_month}월** 이후로는 유통 데이터가 없어 지금 시세를 확인하기 어려워요.\n"
+            f"최근 1년 기준 **{cheapest_year}년 {cheapest_month}월**에 가장 저렴했으니 다음 출하기에 참고해보세요."
+        )
+    else:
+        ai_commentary = generate_price_commentary(
+            fruit=selected,
+            cheapest_year=cheapest_year,
+            cheapest_month=cheapest_month,
+            latest_year=latest_year,
+            latest_month=latest_month,
+            cur_price=cur_price,
+            position_pct=position * 100,
+            light_label=light_label,
+        )
+        analysis_text = ai_commentary or (
+            f"최근 1년 데이터 기준 **{cheapest_year}년 {cheapest_month}월**에 가격이 가장 낮아지는 경향이 있어요.\n"
+            f"가장 최근 집계된 **{latest_year}년 {latest_month}월** 평균가는 약 **{cur_price:,.0f}원**이에요."
+        )
 
     sel_ctgry_cd, sel_item_cd = ITEM_CODE_LOOKUP.get(selected, ("", ""))
     varieties = VARIETY_LOOKUP.get((sel_ctgry_cd, sel_item_cd), [])
@@ -741,7 +767,7 @@ else:
             <div class="title">{html.escape(selected)}</div>
             <div>
                 <span class="light light-on" style="background:{light_color}; color:{light_color};"></span>
-                <b>{html.escape(light_label)}</b> (최근 데이터 기준 연중 가격대의 {position*100:.0f}% 지점)
+                <b>{html.escape(light_label)}</b> {status_suffix}
             </div>
             <div class="analysis-line">{_format_rich_text(analysis_text)}</div>
             <div class="extra-info">🌱 주요 품종: {html.escape(variety_text)} &nbsp;·&nbsp; 🗺️ 대표 산지: {html.escape(region_text)}</div>
