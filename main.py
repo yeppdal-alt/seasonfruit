@@ -24,9 +24,11 @@ Price Status Card의 2줄 분석 문구는 Upstage Solar(모델: solar-open2, Op
 "none"으로 꺼둡니다. Solar 호출이 실패하면(키 미등록 등) 규칙 기반 문구로 자동 대체됩니다.
 """
 
+import html
 import math
 import os
 import random
+import re
 from datetime import date
 
 import pandas as pd
@@ -129,6 +131,58 @@ for _name in FRUIT_INFO:
     if _name not in ITEM_CODE_LOOKUP and _name in FALLBACK_ITEM_CODES:
         ITEM_CODE_LOOKUP[_name] = FALLBACK_ITEM_CODES[_name]
 
+
+@st.cache_data(ttl=None, show_spinner=False)
+def load_variety_names() -> dict:
+    """price_code.xlsx의 '품종코드' 시트에서 (부류코드, 품목코드) -> 품종명 목록을 만든다."""
+    try:
+        v = pd.read_excel(PRICE_CODE_PATH, sheet_name="품종코드")
+        v.columns = ["ctgry_cd", "item_cd", "vrty_cd", "vrty_nm"]
+        result = {}
+        for (ctgry_cd, item_cd), grp in v.groupby(["ctgry_cd", "item_cd"]):
+            seen, uniq = set(), []
+            for n in grp["vrty_nm"]:
+                name = str(n).strip()
+                if name and name not in seen:
+                    seen.add(name)
+                    uniq.append(name)
+            result[(str(int(ctgry_cd)), str(int(item_cd)))] = uniq
+        return result
+    except Exception:
+        return {}
+
+
+VARIETY_LOOKUP = load_variety_names()
+
+# 참고용 대표 산지 정보 (일반적으로 널리 알려진 주산지 기준 요약, 공공데이터 API 응답에는
+# 포함되지 않는 항목이라 별도로 정리했습니다.)
+PRODUCTION_REGIONS = {
+    "사과": "경북 청송·안동, 충북 충주 등",
+    "배": "충남 천안, 전남 나주 등",
+    "복숭아": "충북 음성·충주, 경북 청도 등",
+    "포도": "경북 상주·김천, 경기 안성 등 (샤인머스캣은 경남 거창 등)",
+    "감귤": "제주",
+    "단감": "경남 창원(진영), 전남 나주 등",
+    "바나나": "대부분 수입(필리핀 등), 국내는 제주·전남 일부",
+    "참다래": "전남 해남·경남 등 (그린키위는 뉴질랜드 수입)",
+    "파인애플": "대부분 수입(필리핀 등)",
+    "오렌지": "수입(미국 캘리포니아, 호주 등)",
+    "자몽": "수입(미국, 남아공 등)",
+    "레몬": "수입(미국, 칠레 등)",
+    "체리": "수입(미국 워싱턴 등)",
+    "망고": "제주·전남 일부 국내산, 대부분 수입(태국·베트남 등)",
+    "블루베리": "전북 고창, 전남 등",
+    "아보카도": "수입(멕시코·페루 등)",
+    "수박": "충북 음성, 전남 고창, 경북 고령 등",
+}
+
+
+def _format_rich_text(text: str) -> str:
+    """마크다운 **볼드**와 줄바꿈만 지원하는 최소 HTML 이스케이프 변환."""
+    escaped = html.escape(text)
+    escaped = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", escaped)
+    return escaped.replace("\n", "<br>")
+
 # ----------------------------------------------------------------------------
 # 스타일
 # ----------------------------------------------------------------------------
@@ -148,12 +202,6 @@ st.markdown(
         margin-bottom: 1.4rem;
         font-size: 1rem;
     }
-    div[data-testid="stTextInput"] input {
-        border-radius: 999px !important;
-        padding: 0.9rem 1.3rem !important;
-        font-size: 1.1rem !important;
-        border: 2px solid #ffb37a !important;
-    }
     .stButton > button {
         border-radius: 999px;
         border: 1px solid #f0d9c8;
@@ -171,18 +219,48 @@ st.markdown(
     .tag-row .stButton > button {
         border-radius: 999px;
         font-size: 0.78rem;
-        padding: 0.25rem 0.7rem;
-        background-color: #f3f4f6;
-        color: #6b7280;
-        border: 1px solid #e5e7eb;
-        font-weight: 500;
+        padding: 0.3rem 0.8rem;
+        background-color: #ffe9d6;
+        color: #b45309;
+        border: 1px solid #ffd8b0;
+        font-weight: 600;
+    }
+    .tag-row .stButton > button:hover {
+        background-color: #ffd8b0;
+        color: #7c2d12;
+        border-color: #ffc794;
     }
     .status-card {
-        border-radius: 20px;
-        padding: 1.6rem 1.8rem;
-        background: linear-gradient(135deg, #fff9f2 0%, #fff2e2 100%);
-        border: 1px solid #ffe3c2;
-        box-shadow: 0 6px 18px rgba(0,0,0,0.05);
+        border-radius: 24px;
+        min-height: 260px;
+        padding: 2.2rem 2.4rem;
+        display: flex;
+        align-items: center;
+        gap: 1.8rem;
+        background: linear-gradient(135deg, #ffe8d1 0%, #ffd9b8 100%);
+        border: 1px solid #ffcc99;
+        box-shadow: 0 8px 22px rgba(255, 152, 60, 0.15);
+        margin-bottom: 1rem;
+    }
+    .status-card .emoji {
+        font-size: 5.5rem;
+        line-height: 1;
+        flex-shrink: 0;
+    }
+    .status-card .title {
+        font-size: 1.6rem;
+        font-weight: 800;
+        color: #1f2933;
+        margin-bottom: 0.5rem;
+    }
+    .status-card .analysis-line {
+        margin-top: 0.6rem;
+        line-height: 1.6;
+    }
+    .status-card .extra-info {
+        margin-top: 0.7rem;
+        font-size: 0.88rem;
+        color: #7c5a3a;
     }
     .light {
         display: inline-block;
@@ -190,6 +268,7 @@ st.markdown(
         height: 16px;
         border-radius: 50%;
         margin-right: 6px;
+        vertical-align: middle;
     }
     .light-on { box-shadow: 0 0 10px currentColor; }
     </style>
@@ -443,16 +522,10 @@ def cheapest_fruit_this_month(start_ym: str, end_ym: str) -> str:
 
 
 # ----------------------------------------------------------------------------
-# 상단: 메인 카피 + 검색창 + 태그
+# 상단: 메인 카피 + 태그
 # ----------------------------------------------------------------------------
 st.markdown('<div class="main-copy">좋아하는 과일, 언제 사야 가장 싸고 맛있을까?</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-copy">과일 이름을 검색하거나 아래에서 골라보세요. 연간 가격 추이로 최적의 구매 시기를 알려드려요.</div>', unsafe_allow_html=True)
-
-search_query = st.text_input(
-    "fruit_search",
-    placeholder="과일 이름을 검색해보세요 (예: 복숭아, 사과, 샤인머스캣)",
-    label_visibility="collapsed",
-)
+st.markdown('<div class="sub-copy">아래에서 과일을 골라보세요. 연간 가격 추이로 최적의 구매 시기를 알려드려요.</div>', unsafe_allow_html=True)
 
 st.markdown('<div class="tag-row">', unsafe_allow_html=True)
 tag_cols = st.columns(len(TAGS) + 6)
@@ -464,13 +537,6 @@ for i, (label, target) in enumerate(TAGS):
             else:
                 select_fruit(target)
 st.markdown("</div>", unsafe_allow_html=True)
-
-if search_query.strip():
-    matches = [f for f in FRUIT_INFO.keys() if search_query.strip() in f]
-    if matches:
-        select_fruit(matches[0])
-    else:
-        st.warning(f"'{search_query}'와(과) 일치하는 과일 데이터를 찾지 못했어요. 목록에 있는 과일명으로 다시 시도해보세요.")
 
 st.write("")
 
@@ -532,36 +598,43 @@ else:
 
     emoji = FRUIT_INFO.get(selected, {}).get("emoji", "🍏")
 
-    with st.container():
-        st.markdown('<div class="status-card">', unsafe_allow_html=True)
-        c1, c2 = st.columns([1, 3])
-        with c1:
-            st.markdown(f"<div style='font-size:5rem; text-align:center;'>{emoji}</div>", unsafe_allow_html=True)
-        with c2:
-            st.markdown(f"### {selected}")
-            st.markdown(
-                f"<span class='light light-on' style='background:{light_color}; color:{light_color};'></span>"
-                f"<b>{light_label}</b> (최근 데이터 기준 연중 가격대의 {position*100:.0f}% 지점)",
-                unsafe_allow_html=True,
-            )
-            ai_commentary = generate_price_commentary(
-                fruit=selected,
-                cheapest_year=cheapest_year,
-                cheapest_month=cheapest_month,
-                latest_year=latest_year,
-                latest_month=latest_month,
-                cur_price=cur_price,
-                position_pct=position * 100,
-                light_label=light_label,
-            )
-            if ai_commentary:
-                st.markdown(ai_commentary)
-            else:
-                st.markdown(
-                    f"최근 1년 데이터 기준 **{cheapest_year}년 {cheapest_month}월**에 가격이 가장 낮아지는 경향이 있어요.  \n"
-                    f"가장 최근 집계된 **{latest_year}년 {latest_month}월** 평균가는 약 **{cur_price:,.0f}원**이에요."
-                )
-        st.markdown("</div>", unsafe_allow_html=True)
+    ai_commentary = generate_price_commentary(
+        fruit=selected,
+        cheapest_year=cheapest_year,
+        cheapest_month=cheapest_month,
+        latest_year=latest_year,
+        latest_month=latest_month,
+        cur_price=cur_price,
+        position_pct=position * 100,
+        light_label=light_label,
+    )
+    analysis_text = ai_commentary or (
+        f"최근 1년 데이터 기준 **{cheapest_year}년 {cheapest_month}월**에 가격이 가장 낮아지는 경향이 있어요.\n"
+        f"가장 최근 집계된 **{latest_year}년 {latest_month}월** 평균가는 약 **{cur_price:,.0f}원**이에요."
+    )
+
+    sel_ctgry_cd, sel_item_cd = ITEM_CODE_LOOKUP.get(selected, ("", ""))
+    varieties = VARIETY_LOOKUP.get((sel_ctgry_cd, sel_item_cd), [])
+    variety_text = ", ".join(varieties[:6]) if varieties else "정보 없음"
+    region_text = PRODUCTION_REGIONS.get(selected, "정보 없음")
+
+    # 여러 st.* 위젯을 나눠 호출하면 카드 배경(div)이 실제 내용을 감싸지 못하고 잘려 보이므로,
+    # 카드 전체를 하나의 HTML 블록으로 만들어 배경이 내용을 온전히 감싸도록 한다.
+    card_html = f"""
+    <div class="status-card">
+        <div class="emoji">{emoji}</div>
+        <div>
+            <div class="title">{html.escape(selected)}</div>
+            <div>
+                <span class="light light-on" style="background:{light_color}; color:{light_color};"></span>
+                <b>{html.escape(light_label)}</b> (최근 데이터 기준 연중 가격대의 {position*100:.0f}% 지점)
+            </div>
+            <div class="analysis-line">{_format_rich_text(analysis_text)}</div>
+            <div class="extra-info">🌱 주요 품종: {html.escape(variety_text)} &nbsp;·&nbsp; 🗺️ 대표 산지: {html.escape(region_text)}</div>
+        </div>
+    </div>
+    """
+    st.markdown(card_html, unsafe_allow_html=True)
 
     st.write("")
 
