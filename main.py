@@ -252,17 +252,20 @@ st.markdown(
         filter: brightness(1.05);
         color: #ffffff;
     }
-    .tag-row .stButton > button {
-        border: none;
-        background-color: transparent;
-        box-shadow: none;
-        font-size: 0.82rem;
-        padding: 0.2rem 0.5rem;
-        color: var(--accent-dark);
+    /* 해시태그는 버튼이 아니라 클릭 가능한 글자로 보이도록 버튼 모양을 전부 제거한다 */
+    .tag-row .stButton > button,
+    .tag-row .stButton > button:focus,
+    .tag-row .stButton > button:active,
+    .tag-row .stButton > button:focus:not(:active) {
+        all: unset;
+        cursor: pointer;
+        font-size: 0.85rem;
         font-weight: 700;
+        color: var(--accent-dark);
+        padding: 0.1rem 0.2rem;
+        box-shadow: none !important;
     }
     .tag-row .stButton > button:hover {
-        background-color: transparent;
         color: var(--ink);
         text-decoration: underline;
     }
