@@ -187,6 +187,39 @@ PRODUCTION_REGIONS = {
     "참외": "경북 성주 등",
 }
 
+# 스마트 구매팁 - "좋은 과일 고르는 법" 폴백 문구 (Solar 호출이 실패했을 때만 사용).
+# 일반적으로 널리 알려진 신선도 판별 기준을 정리한 것으로, 과장 없이 사실 기반으로 작성했습니다.
+FRUIT_SELECTION_TIPS = {
+    "사과": "꼭지 주변이 마르지 않고 껍질에 윤기가 돌며, 같은 크기라면 묵직한 것이 수분과 당도가 높습니다.",
+    "배": "표면이 매끈하고 은은한 향이 나며, 꼭지 반대편을 눌렀을 때 살짝 탄력이 있는 것이 좋습니다.",
+    "복숭아": "붉은빛이 고르게 퍼지고 향이 진하며, 살짝 눌렀을 때 탄력 있게 들어가는 것이 잘 익은 것입니다.",
+    "포도": "알이 촘촘히 붙어 있고 표면에 하얀 과분이 남아 있으며, 줄기가 마르지 않은 것이 신선합니다.",
+    "감귤": "껍질이 얇고 탄력 있으며, 같은 크기 대비 무거운 것이 즙이 많습니다.",
+    "단감": "표면에 상처가 없고 꼭지가 마르지 않았으며, 묵직하고 단단한 것이 좋습니다.",
+    "바나나": "껍질에 갈색 반점(슈가스팟)이 있으면 당도가 오른 상태이고, 초록빛이 많이 남아 있으면 며칠 후숙이 필요합니다.",
+    "참다래": "손으로 살짝 눌렀을 때 약간 탄력 있게 들어가는 것이 잘 익은 상태이며, 딱딱하면 상온에서 며칠 후숙하세요.",
+    "파인애플": "꼭지(잎) 색이 진한 초록이고 향이 은은하게 나며, 밑동을 눌렀을 때 탄력이 있는 것이 좋습니다.",
+    "오렌지": "껍질이 매끈하고 탄력 있으며, 같은 크기 대비 무거운 것이 즙이 많습니다.",
+    "자몽": "껍질이 얇고 매끈하며 묵직한 것이 즙이 많고, 약간 납작한 모양이 단맛이 강한 편입니다.",
+    "레몬": "껍질에 윤기가 있고 단단하며, 무거운 것이 즙이 많습니다.",
+    "체리": "꼭지가 초록빛으로 싱싱하고 알에 윤기가 있으며, 주름이나 무른 부분이 없는 것을 고르세요.",
+    "망고": "손으로 살짝 눌렀을 때 탄력 있게 들어가고 향이 진하게 나는 것이 잘 익은 상태입니다.",
+    "블루베리": "표면에 하얀 과분이 남아 있고 알이 통통하며, 뭉개지거나 물기가 도는 것은 피하세요.",
+    "아보카도": "꼭지 부분을 눌렀을 때 살짝 들어가면서 탄력이 있으면 먹기 좋은 상태이고, 단단하면 며칠 후숙하세요.",
+    "수박": "두드렸을 때 통통한 소리가 나고, 배꼽(꽃이 떨어진 자리)이 작고 균일한 것이 잘 익은 것입니다.",
+    "토마토": "꼭지가 싱싱한 초록색이고 껍질에 윤기가 돌며, 묵직한 것이 과육이 알찹니다.",
+    "딸기": "꼭지 바로 아래까지 붉은빛이 고르게 퍼져 있고 윤기가 나는 것이 당도가 높습니다.",
+    "참외": "표면 골이 선명하고 향이 진하며, 꼭지 부분이 마르지 않은 것이 신선합니다.",
+}
+GENERIC_SELECTION_TIP = (
+    "표면에 상처나 무른 부분이 없고, 같은 크기 대비 묵직한 것을 고르면 대체로 신선하고 당도가 높습니다."
+)
+CHANNEL_TIP_DEFAULT_TEMPLATE = (
+    "제철 성수기에는 대형마트·재래시장의 특가 물량이 가격 대비 품질이 좋고, 상품성 좋은 것을 "
+    "원한다면 {regions} 등 산지 직거래(로컬푸드매장·온라인 산지직송)를 이용하면 신선도와 "
+    "가격 모두 유리한 경우가 많습니다."
+)
+
 
 def _format_rich_text(text: str) -> str:
     """마크다운 **볼드**와 줄바꿈만 지원하는 최소 HTML 이스케이프 변환."""
@@ -378,6 +411,42 @@ st.markdown(
     .price-table tr.event-row td {
         background-color: rgba(255,138,91,0.08);
         font-weight: 700;
+    }
+    /* 스마트 구매팁 카드 */
+    .tip-card {
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(255,255,255,0.9);
+        border-radius: 20px;
+        padding: 1.2rem 1.3rem;
+        height: 100%;
+        min-height: 172px;
+        box-shadow: 0 8px 20px rgba(232,112,63,0.12);
+        margin-bottom: 0.6rem;
+    }
+    .tip-card-emoji {
+        font-size: 1.6rem;
+        margin-bottom: 0.35rem;
+    }
+    .tip-card-title {
+        font-weight: 800;
+        font-size: 1.02rem;
+        color: var(--ink);
+        margin-bottom: 0.45rem;
+    }
+    .tip-card-text {
+        font-size: 0.9rem;
+        line-height: 1.6;
+        color: var(--muted);
+    }
+    @media (max-width: 700px) {
+        .st-key-tip_cards div[data-testid="stHorizontalBlock"] {
+            flex-wrap: wrap;
+        }
+        .st-key-tip_cards div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+            flex: 1 1 100% !important;
+            width: 100% !important;
+            min-width: 100% !important;
+        }
     }
     </style>
     """,
@@ -632,6 +701,59 @@ def generate_polished_copy(
             return None
         data = json.loads(match.group(0))
         required_keys = {"main_copy", "sub_copy", "tag1", "tag2", "tag3", "source_note"}
+        if not required_keys.issubset(data.keys()):
+            return None
+        if not all(isinstance(data[k], str) and data[k].strip() for k in required_keys):
+            return None
+        return data
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def generate_smart_buying_tips(fruit: str, varieties: tuple, regions: str) -> dict | None:
+    """Solar(solar-open2)로 "스마트 구매팁" 3항목(품종별 구매팁/고르는 법/구매 채널)을 생성한다.
+
+    과장되거나 근거 없는 표현 없이 사실 기반으로만 작성하도록 프롬프트에 명시했다.
+    실패하면 None을 반환하며, 호출부에서 FRUIT_SELECTION_TIPS 등 규칙 기반 문구로 대체한다.
+    하루 1회만 다시 생성하도록 캐싱해 과일당 반복 호출을 피한다.
+    """
+    try:
+        api_key = st.secrets["SOLAR_API_KEY"]
+    except Exception:
+        return None
+    if OpenAI is None:
+        return None
+
+    try:
+        client = OpenAI(api_key=api_key, base_url=SOLAR_BASE_URL)
+        variety_text = ", ".join(varieties) if varieties else "품종 정보 없음"
+        prompt = (
+            "너는 과일 구매를 도와주는 신뢰할 수 있는 쇼핑 가이드야. 아래 과일에 대해 "
+            "실제로 도움이 되는 정확한 정보만 담아 세 항목을 각각 1~3줄 이내 한국어 문장으로 "
+            "작성해줘. 과장되거나 근거 없는 표현, 불릿 기호는 쓰지 마.\n\n"
+            f"- 과일: {fruit}\n"
+            f"- 주요 품종: {variety_text}\n"
+            f"- 주산지: {regions}\n\n"
+            "1) variety_tip: 품종별로 맛·식감·구매 시기가 어떻게 다른지\n"
+            "2) selection_tip: 좋은 품질의 이 과일을 고르는 실용적인 방법(색, 무게, 향, 촉감 등 "
+            "구체적 기준)\n"
+            "3) channel_tip: 대형마트/재래시장/산지직송(온라인) 중 이 과일을 사기에 유리한 채널과 "
+            "그 이유\n\n"
+            '다른 설명 없이 정확히 {"variety_tip": "...", "selection_tip": "...", '
+            '"channel_tip": "..."} 형태의 JSON 객체 하나만 출력해.'
+        )
+        resp = client.chat.completions.create(
+            model=SOLAR_MODEL,
+            reasoning_effort="none",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = resp.choices[0].message.content or ""
+        match = re.search(r"\{.*\}", text, re.S)
+        if not match:
+            return None
+        data = json.loads(match.group(0))
+        required_keys = {"variety_tip", "selection_tip", "channel_tip"}
         if not required_keys.issubset(data.keys()):
             return None
         if not all(isinstance(data[k], str) and data[k].strip() for k in required_keys):
@@ -1086,6 +1208,49 @@ else:
             st.markdown(table_html, unsafe_allow_html=True)
 
     ctgry_cd, item_cd = ITEM_CODE_LOOKUP.get(selected, ("", ""))
+
+    # ----------------------------------------------------------------------------
+    # 스마트 구매팁 (Solar로 생성, 실패 시 규칙 기반 문구로 대체)
+    # ----------------------------------------------------------------------------
+    st.write("")
+    st.markdown("#### 🛒 스마트 구매팁")
+
+    varieties_for_tip = VARIETY_LOOKUP.get((ctgry_cd, item_cd), [])
+    regions_for_tip = PRODUCTION_REGIONS.get(selected, "국내산·수입 다양")
+
+    tips = generate_smart_buying_tips(selected, tuple(varieties_for_tip), regions_for_tip)
+    if tips:
+        variety_tip = tips["variety_tip"]
+        selection_tip = tips["selection_tip"]
+        channel_tip = tips["channel_tip"]
+    else:
+        variety_names = ", ".join(varieties_for_tip[:4]) if varieties_for_tip else None
+        variety_tip = (
+            f"주요 품종으로는 {variety_names}이(가) 있으며, 품종에 따라 당도와 수확 시기가 "
+            "조금씩 다릅니다." if variety_names else "품종별 상세 정보는 아직 준비 중입니다."
+        )
+        selection_tip = FRUIT_SELECTION_TIPS.get(selected, GENERIC_SELECTION_TIP)
+        channel_tip = CHANNEL_TIP_DEFAULT_TEMPLATE.format(regions=regions_for_tip)
+
+    tip_cards = [
+        ("🌱", "품종별 구매팁", variety_tip),
+        ("👀", "좋은 과일 고르는 법", selection_tip),
+        ("🏪", "구매 채널 안내", channel_tip),
+    ]
+    with st.container(key="tip_cards"):
+        tip_cols = st.columns(3)
+        for col, (emoji, title, text) in zip(tip_cols, tip_cards):
+            with col:
+                st.markdown(
+                    f'<div class="tip-card">'
+                    f'<div class="tip-card-emoji">{emoji}</div>'
+                    f'<div class="tip-card-title">{html.escape(title)}</div>'
+                    f'<div class="tip-card-text">{_format_rich_text(text)}</div>'
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+    st.write("")
     st.caption(
         f"데이터 기간: {START_YM[:4]}.{START_YM[4:]} ~ {END_YM[:4]}.{END_YM[4:]}  ·  "
         f"부류코드 {ctgry_cd} / 품목코드 {item_cd}  ·  "
