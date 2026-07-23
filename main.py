@@ -1006,12 +1006,12 @@ else:
             font=dict(size=12), bgcolor="rgba(0,0,0,0)",
         ),
         yaxis=dict(
-            title=dict(text="가격 (원)", font=dict(size=11, color="#9ca3af")),
-            showgrid=True,
-            gridcolor="#f2f2f2",
-            gridwidth=1,
+            # 미니멀한 디자인: 축 눈금/숫자는 감추고, 정확한 가격은 막대·라인 위 값 라벨과
+            # hover 툴팁(hovermode="x unified")으로만 확인하도록 한다.
+            title=None,
+            showticklabels=False,
+            showgrid=False,
             zeroline=False,
-            tickformat=",",
             automargin=True,
         ),
         xaxis=dict(
