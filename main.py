@@ -71,7 +71,7 @@ DIVISION_LABELS = {"01": "소매", "02": "도매", "03": "친환경", "07": "친
 MAIN_FRUITS = [
     "사과", "배", "복숭아", "포도", "감귤", "단감", "바나나", "참다래",
     "파인애플", "오렌지", "자몽", "레몬", "체리", "망고", "블루베리", "아보카도",
-    "수박", "토마토", "딸기",
+    "수박", "토마토", "딸기", "참외",
 ]
 
 # 대표 이미지 대용 이모지 + 데모(대체) 데이터 생성을 위한 계절성 파라미터
@@ -97,6 +97,7 @@ FRUIT_INFO = {
     "수박":     {"emoji": "🍉", "base": 22000, "amp": 8000, "cheap_month": 8},
     "토마토":   {"emoji": "🍅", "base": 3500, "amp": 1200, "cheap_month": 7},
     "딸기":     {"emoji": "🍓", "base": 9000, "amp": 3500, "cheap_month": 1},
+    "참외":     {"emoji": "🍈", "base": 4200, "amp": 1600, "cheap_month": 6},
 }
 
 TAGS = [
@@ -113,7 +114,7 @@ FALLBACK_ITEM_CODES = {
     "오렌지": ("400", "421"), "자몽": ("400", "423"), "레몬": ("400", "424"),
     "체리": ("400", "425"), "망고": ("400", "428"), "블루베리": ("400", "429"),
     "아보카도": ("400", "430"), "수박": ("200", "221"),
-    "토마토": ("200", "225"), "딸기": ("200", "226"),
+    "토마토": ("200", "225"), "딸기": ("200", "226"), "참외": ("200", "222"),
 }
 
 
@@ -183,6 +184,7 @@ PRODUCTION_REGIONS = {
     "수박": "충북 음성, 전남 고창, 경북 고령 등",
     "토마토": "경남 진주, 부산 등",
     "딸기": "충남 논산, 경남 진주·밀양 등",
+    "참외": "경북 성주 등",
 }
 
 
@@ -332,7 +334,16 @@ st.markdown(
         color: var(--ink) !important;
         font-weight: 800 !important;
     }
-    /* 과일 버튼 그리드: 좁은 화면(모바일)에서는 한 줄에 3개씩 접혀서 세로 스크롤을 줄인다 */
+    /* 과일 버튼 그리드: 한 줄에 5개씩 촘촘하게, 버튼 사이 간격은 좁게 */
+    .st-key-fruit_grid div[data-testid="stHorizontalBlock"] {
+        gap: 0.5rem !important;
+    }
+    .st-key-fruit_grid .stButton > button {
+        padding: 0.6rem 0.3rem;
+        font-size: 0.92rem;
+        white-space: nowrap;
+    }
+    /* 좁은 화면(모바일)에서는 한 줄에 3개씩 접혀서 세로 스크롤을 줄인다 */
     @media (max-width: 700px) {
         .st-key-fruit_grid div[data-testid="stHorizontalBlock"] {
             flex-wrap: wrap;
@@ -709,10 +720,10 @@ with st.container(key="tag_row"):
 
 st.write("")
 
-# 과일 버튼 그리드. 데스크톱은 4열이지만, 모바일 폭에서는 CSS로 한 줄에 3개씩 접히도록 해
-# 버튼 19개를 세로로 쭉 스크롤하지 않아도 되게 만든다 (아래 st-key-fruit_grid 미디어쿼리 참고).
+# 과일 버튼 그리드. 데스크톱은 5열이지만, 모바일 폭에서는 CSS로 한 줄에 3개씩 접히도록 해
+# 버튼 20개를 세로로 쭉 스크롤하지 않아도 되게 만든다 (아래 st-key-fruit_grid 미디어쿼리 참고).
 with st.container(key="fruit_grid"):
-    cols_per_row = 4
+    cols_per_row = 5
     for row_start in range(0, len(MAIN_FRUITS), cols_per_row):
         row_fruits = MAIN_FRUITS[row_start: row_start + cols_per_row]
         cols = st.columns(cols_per_row)
