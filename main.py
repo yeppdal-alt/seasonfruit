@@ -190,38 +190,59 @@ def _format_rich_text(text: str) -> str:
 st.markdown(
     """
     <style>
+    :root {
+        --accent: #ff8a5b;
+        --accent-dark: #e8703f;
+        --ink: #171412;
+        --muted: #8c8078;
+    }
     [data-testid="stAppViewContainer"] {
-        background: linear-gradient(180deg, #fffaf3 0%, #fff3e6 45%, #fdecdc 100%);
+        background: linear-gradient(135deg, #fdf1d8 0%, #fbdcc9 45%, #f8c7cf 100%);
     }
     [data-testid="stHeader"] {
         background: rgba(0,0,0,0);
     }
     .main-copy {
-        font-size: 2.1rem;
+        font-size: 2.2rem;
         font-weight: 800;
+        letter-spacing: -0.02em;
         text-align: center;
         margin-bottom: 0.3rem;
-        color: #1f2933;
+        color: var(--ink);
     }
     .sub-copy {
         text-align: center;
-        color: #6b7280;
+        color: var(--muted);
         margin-bottom: 1.4rem;
         font-size: 1rem;
     }
+    /* 기본(선택되지 않은) 버튼: 화이트 필, 블랙 텍스트 — 온보딩 카드의 리스트 옵션과 동일한 톤 */
     .stButton > button {
         border-radius: 999px;
-        border: 1px solid #f0d9c8;
-        background-color: #fff7f0;
-        color: #5c3a21;
+        border: 1px solid rgba(23,20,18,0.08);
+        background-color: #ffffff;
+        color: var(--ink);
         font-weight: 600;
-        padding: 0.55rem 0.4rem;
+        padding: 0.6rem 0.4rem;
+        box-shadow: 0 2px 8px rgba(23,20,18,0.05);
         transition: all 0.15s ease-in-out;
     }
     .stButton > button:hover {
-        background-color: #ffb37a;
-        color: white;
-        border-color: #ffb37a;
+        border-color: var(--accent);
+        color: var(--accent-dark);
+    }
+    /* 선택된(primary) 버튼: 코럴 그라디언트 필 + 화이트 텍스트 */
+    .stButton > button[kind="primary"] {
+        border-radius: 999px;
+        border: none;
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+        color: #ffffff;
+        font-weight: 700;
+        box-shadow: 0 6px 16px rgba(232,112,63,0.35);
+    }
+    .stButton > button[kind="primary"]:hover {
+        filter: brightness(1.05);
+        color: #ffffff;
     }
     .tag-row .stButton > button {
         border: none;
@@ -229,12 +250,12 @@ st.markdown(
         box-shadow: none;
         font-size: 0.82rem;
         padding: 0.2rem 0.5rem;
-        color: #b45309;
+        color: var(--accent-dark);
         font-weight: 700;
     }
     .tag-row .stButton > button:hover {
         background-color: transparent;
-        color: #7c2d12;
+        color: var(--ink);
         text-decoration: underline;
     }
     .status-card {
@@ -244,30 +265,32 @@ st.markdown(
         display: flex;
         align-items: center;
         gap: 1.8rem;
-        background: linear-gradient(135deg, #ffe8d1 0%, #ffd9b8 100%);
-        border: 1px solid #ffcc99;
-        box-shadow: 0 8px 22px rgba(255, 152, 60, 0.15);
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(255,255,255,0.9);
+        box-shadow: 0 10px 26px rgba(232, 112, 63, 0.16);
         margin-bottom: 1rem;
     }
     .status-card .emoji {
         font-size: 5.5rem;
         line-height: 1;
         flex-shrink: 0;
+        filter: drop-shadow(0 6px 10px rgba(232,112,63,0.25));
     }
     .status-card .title {
         font-size: 1.6rem;
         font-weight: 800;
-        color: #1f2933;
+        color: var(--ink);
         margin-bottom: 0.5rem;
     }
     .status-card .analysis-line {
         margin-top: 0.6rem;
         line-height: 1.6;
+        color: var(--ink);
     }
     .status-card .extra-info {
         margin-top: 0.7rem;
         font-size: 0.88rem;
-        color: #7c5a3a;
+        color: var(--muted);
     }
     .light {
         display: inline-block;
@@ -278,6 +301,10 @@ st.markdown(
         vertical-align: middle;
     }
     .light-on { box-shadow: 0 0 10px currentColor; }
+    h4, h5, .stMarkdown h4, .stMarkdown h5 {
+        color: var(--ink) !important;
+        font-weight: 800 !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -628,7 +655,14 @@ for row_start in range(0, len(MAIN_FRUITS), cols_per_row):
     for col, fruit in zip(cols, row_fruits):
         with col:
             emoji = FRUIT_INFO.get(fruit, {}).get("emoji", "🍏")
-            if st.button(f"{emoji} {fruit}", key=f"fruit_{fruit}", use_container_width=True):
+            is_selected = fruit == st.session_state.selected_fruit
+            label = f"✓ {emoji} {fruit}" if is_selected else f"{emoji} {fruit}"
+            if st.button(
+                label,
+                key=f"fruit_{fruit}",
+                use_container_width=True,
+                type="primary" if is_selected else "secondary",
+            ):
                 select_fruit(fruit)
 
 st.divider()
@@ -733,7 +767,7 @@ else:
         month_labels.append(f"{y}년 {m}월" if y != prev_year else f"{m}월")
         prev_year = y
     chart_df["month_label"] = month_labels
-    bar_colors = ["#22c55e" if i == cheapest_pos else "#ffb37a" for i in range(len(chart_df))]
+    bar_colors = ["#22c55e" if i == cheapest_pos else "#ff8a5b" for i in range(len(chart_df))]
 
     def _fmt_label(v) -> str:
         if v is None or (isinstance(v, float) and math.isnan(v)):
@@ -749,8 +783,8 @@ else:
     if "소매" in divisions or "도매" in divisions:
         # 소매(위쪽 값표시) / 도매(아래쪽 값표시)를 부드러운 곡선 + 글로우 + 값 라벨로 표현
         line_specs = [
-            ("소매", "#fb923c", "#9a3412", "top center", "rgba(251,146,60,0.16)"),
-            ("도매", "#60a5fa", "#1e40af", "bottom center", "rgba(96,165,250,0.08)"),
+            ("소매", "#ff8a5b", "#c2410c", "top center", "rgba(255,138,91,0.18)"),
+            ("도매", "#57534e", "#3f3c38", "bottom center", "rgba(87,83,78,0.08)"),
         ]
         for div_name, color, label_color, text_pos, fill_color in line_specs:
             if div_name not in divisions:
