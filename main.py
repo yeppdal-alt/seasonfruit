@@ -32,8 +32,8 @@ import random
 import re
 from datetime import date
 
+import altair as alt
 import pandas as pd
-import plotly.graph_objects as go
 import requests
 import streamlit as st
 
@@ -826,7 +826,7 @@ else:
     st.write("")
 
     # ------------------------------------------------------------------
-    # 연간 가격 추이 (Plotly)
+    # 연간 가격 추이 (Altair)
     # ------------------------------------------------------------------
     st.markdown("#### 📈 최근 12개월 가격 추이")
 
@@ -840,7 +840,7 @@ else:
         month_labels.append(f"{y}년 {m}월" if y != prev_year else f"{m}월")
         prev_year = y
     chart_df["month_label"] = month_labels
-    bar_colors = ["#22c55e" if i == cheapest_pos else "#ff8a5b" for i in range(len(chart_df))]
+    order = list(chart_df["month_label"])  # 달력 순서를 그대로 x축 정렬 기준으로 사용
 
     def _fmt_label(v) -> str:
         if v is None or (isinstance(v, float) and math.isnan(v)):
@@ -849,17 +849,31 @@ else:
             return f"{v / 10000:.1f}만"
         return f"{v / 1000:.1f}천"
 
-    fig = go.Figure()
-    division_series = {}  # 이벤트(최저가/지금) 주석의 y좌표 앵커로 재사용
-
     divisions = fruit_df["division"].unique().tolist()
-    if "소매" in divisions or "도매" in divisions:
-        # 소매(위쪽 값표시) / 도매(아래쪽 값표시)를 부드러운 곡선 + 글로우 + 값 라벨로 표현
-        line_specs = [
-            ("소매", "#ff8a5b", "#c2410c", "top center", "rgba(255,138,91,0.18)"),
-            ("도매", "#57534e", "#3f3c38", "bottom center", "rgba(87,83,78,0.08)"),
-        ]
-        for div_name, color, label_color, text_pos, fill_color in line_specs:
+    has_divisions = "소매" in divisions or "도매" in divisions
+
+    pos_in_chart = cheapest_pos
+    current_pos = len(chart_df) - 1  # 조회 구간의 마지막 자리 = 항상 "지금"
+    cheapest_label = chart_df["month_label"].iloc[pos_in_chart]
+    current_label = chart_df["month_label"].iloc[current_pos]
+
+    CHEAPEST_COLOR = "#22c55e"
+    CURRENT_COLOR = "#8b5cf6"
+
+    layers = []
+
+    # 최저가 달: 은은한 배경 면 하이라이트 (y를 인코딩하지 않으면 전체 높이를 채운다)
+    layers.append(
+        alt.Chart(pd.DataFrame({"month_label": [cheapest_label]}))
+        .mark_rect(color=CHEAPEST_COLOR, opacity=0.15)
+        .encode(x=alt.X("month_label:N", sort=order))
+    )
+
+    division_series = {}
+    if has_divisions:
+        color_scale = alt.Scale(domain=["소매", "도매"], range=["#ff8a5b", "#57534e"])
+        long_rows = []
+        for div_name in ["소매", "도매"]:
             if div_name not in divisions:
                 continue
             d = _chronological_monthly(
@@ -869,144 +883,130 @@ else:
                 list(zip(chart_df["year"], chart_df["month"]))
             ).reset_index()
             division_series[div_name] = d["price"]
+            for label, price in zip(chart_df["month_label"], d["price"]):
+                long_rows.append({"month_label": label, "division": div_name, "price": price})
 
-            # 은은한 글로우 효과: 같은 선을 굵고 흐리게 한 번 더 깔아준다.
-            fig.add_trace(
-                go.Scatter(
-                    x=chart_df["month_label"],
-                    y=d["price"],
-                    mode="lines",
-                    line=dict(color=color, width=11, shape="spline", smoothing=0.35),
-                    opacity=0.13,
-                    showlegend=False,
-                    hoverinfo="skip",
+        plot_df = pd.DataFrame(long_rows)
+        plot_df["label_text"] = plot_df["price"].apply(_fmt_label)
+        line_df = plot_df.dropna(subset=["price"])
+
+        # 소매 라인 아래에만 옅은 그라디언트 느낌의 면적 채우기
+        area_df = line_df[line_df["division"] == "소매"]
+        if not area_df.empty:
+            layers.append(
+                alt.Chart(area_df)
+                .mark_area(opacity=0.16, interpolate="monotone", line=False)
+                .encode(
+                    x=alt.X("month_label:N", sort=order),
+                    y=alt.Y("price:Q", title="가격 (원)"),
+                    color=alt.Color("division:N", scale=color_scale, legend=None),
                 )
             )
-            fig.add_trace(
-                go.Scatter(
-                    x=chart_df["month_label"],
-                    y=d["price"],
-                    mode="lines+markers+text",
-                    name=div_name,
-                    line=dict(color=color, width=3.5, shape="spline", smoothing=0.35),
-                    marker=dict(size=9, color=color, line=dict(color="white", width=2)),
-                    text=[_fmt_label(v) for v in d["price"]],
-                    textposition=text_pos,
-                    textfont=dict(size=12, color=label_color, family="Arial Black, Arial"),
-                    fill="tozeroy",
-                    fillcolor=fill_color,
-                    hovertemplate="%{x}<br>" + div_name + ": %{y:,.0f}원<extra></extra>",
-                    connectgaps=False,
-                )
-            )
-    else:
-        division_series["평균가"] = chart_df["price"]
-        fig.add_trace(
-            go.Bar(
-                x=chart_df["month_label"],
-                y=chart_df["price"],
-                marker_color=bar_colors,
-                marker_line_width=0,
-                name="평균가격",
-                text=[_fmt_label(v) for v in chart_df["price"]],
-                textposition="outside",
-                textfont=dict(size=12, color="#5c3a21", family="Arial Black, Arial"),
-                hovertemplate="%{x}<br>평균가: %{y:,.0f}원<extra></extra>",
+
+        layers.append(
+            alt.Chart(line_df)
+            .mark_line(interpolate="monotone", size=3.2)
+            .encode(
+                x=alt.X("month_label:N", sort=order, title=None, axis=alt.Axis(labelAngle=-45)),
+                y=alt.Y("price:Q", title="가격 (원)"),
+                color=alt.Color(
+                    "division:N", scale=color_scale,
+                    legend=alt.Legend(orient="bottom", title=None),
+                ),
             )
         )
+        layers.append(
+            alt.Chart(line_df)
+            .mark_point(filled=True, size=90, stroke="white", strokeWidth=2)
+            .encode(
+                x=alt.X("month_label:N", sort=order),
+                y=alt.Y("price:Q"),
+                color=alt.Color("division:N", scale=color_scale, legend=None),
+            )
+        )
+        for div_name, dy, label_color in [("소매", -14, "#c2410c"), ("도매", 14, "#3f3c38")]:
+            sub = line_df[line_df["division"] == div_name]
+            if sub.empty:
+                continue
+            layers.append(
+                alt.Chart(sub)
+                .mark_text(dy=dy, fontSize=11, fontWeight="bold", color=label_color)
+                .encode(x=alt.X("month_label:N", sort=order), y=alt.Y("price:Q"), text="label_text:N")
+            )
+        anchor_series = division_series.get("소매", next(iter(division_series.values())))
+    else:
+        bar_df = chart_df.copy()
+        bar_df["label_text"] = bar_df["price"].apply(_fmt_label)
+        bar_df["is_cheapest"] = [i == pos_in_chart for i in range(len(bar_df))]
+        layers.append(
+            alt.Chart(bar_df)
+            .mark_bar(size=22)
+            .encode(
+                x=alt.X("month_label:N", sort=order, title=None, axis=alt.Axis(labelAngle=-45)),
+                y=alt.Y("price:Q", title="가격 (원)"),
+                color=alt.condition(
+                    alt.datum.is_cheapest, alt.value(CHEAPEST_COLOR), alt.value("#ff8a5b")
+                ),
+            )
+        )
+        layers.append(
+            alt.Chart(bar_df)
+            .mark_text(dy=-10, fontSize=11, fontWeight="bold", color="#5c3a21")
+            .encode(x=alt.X("month_label:N", sort=order), y=alt.Y("price:Q"), text="label_text:N")
+        )
+        anchor_series = chart_df["price"]
 
     # 참고용 평균가 기준선
-    anchor_series = division_series.get("소매", next(iter(division_series.values())))
     avg_price = anchor_series.mean()
     if pd.notna(avg_price):
-        fig.add_hline(
-            y=avg_price,
-            line_dash="dot",
-            line_color="#c4c4c4",
-            line_width=1.3,
-            annotation_text=f"평균 {avg_price:,.0f}원",
-            annotation_position="right",
-            annotation_font=dict(size=11, color="#9ca3af"),
+        layers.append(
+            alt.Chart(pd.DataFrame({"y": [avg_price]}))
+            .mark_rule(strokeDash=[4, 4], color="#c4c4c4", size=1.3)
+            .encode(y="y:Q")
         )
 
-    # 최저가 달은 은은한 배경 하이라이트(면), 현재 달은 또렷한 점선 박스(테두리)로 서로 다른
-    # 방식을 사용한다. 표현 방식 자체가 다르기 때문에 두 시점이 같은 달이어도 서로 지워지지
-    # 않고 "면 + 테두리"가 함께 보인다.
-    pos_in_chart = cheapest_pos
-    current_pos = len(chart_df) - 1  # 조회 구간의 마지막 자리 = 항상 "지금"
-
-    CHEAPEST_COLOR = "#22c55e"
-    CURRENT_COLOR = "#8b5cf6"
-
-    # 최저가 달: 배경 면 하이라이트
-    fig.add_vrect(
-        x0=pos_in_chart - 0.5, x1=pos_in_chart + 0.5,
-        fillcolor=CHEAPEST_COLOR, opacity=0.13, line_width=0,
-    )
-    # 현재 달: 점선 테두리 박스 (채우기 없음)
-    fig.add_shape(
-        type="rect",
-        x0=current_pos - 0.5, x1=current_pos + 0.5,
-        y0=0, y1=1, xref="x", yref="paper",
-        line=dict(color=CURRENT_COLOR, width=2.5, dash="dot"),
-        fillcolor="rgba(0,0,0,0)",
+    # 현재 달: 또렷한 점선 테두리 박스 (채우기 없음). 배경 면(최저가)과 표현 방식 자체가
+    # 다르므로, 두 시점이 같은 달이어도 서로 지워지지 않고 "면 + 테두리"가 함께 보인다.
+    layers.append(
+        alt.Chart(pd.DataFrame({"month_label": [current_label]}))
+        .mark_rect(stroke=CURRENT_COLOR, strokeWidth=2.5, strokeDash=[4, 4], fill=None)
+        .encode(x=alt.X("month_label:N", sort=order))
     )
 
-    # 두 이벤트가 같은 달일 때도 라벨이 겹치지 않도록 배지를 위아래로 나눠 쌓는다.
+    # 최저가/지금 배지 텍스트 — 같은 달이면 위아래로 나눠 쌓아 겹치지 않게 한다.
+    y_max_val = float(anchor_series.max()) if pd.notna(anchor_series.max()) else 1.0
+    label_y = y_max_val * 1.15
     same_month = current_pos == pos_in_chart
-    fig.add_annotation(
-        x=chart_df["month_label"].iloc[pos_in_chart], y=1.0, xref="x", yref="paper",
-        text="🏆 최저가 달", showarrow=False, yshift=(44 if same_month else 18),
-        font=dict(size=12, color="white", family="Arial Black, Arial"),
-        bgcolor=CHEAPEST_COLOR, borderpad=5,
+    layers.append(
+        alt.Chart(pd.DataFrame({
+            "month_label": [cheapest_label],
+            "y": [label_y * (1.08 if same_month else 1.0)],
+            "label": ["🏆 최저가 달"],
+        }))
+        .mark_text(fontSize=12, fontWeight="bold", color="#16a34a")
+        .encode(x=alt.X("month_label:N", sort=order), y=alt.Y("y:Q"), text="label:N")
     )
-    fig.add_annotation(
-        x=chart_df["month_label"].iloc[current_pos], y=1.0, xref="x", yref="paper",
-        text="📍 지금", showarrow=False, yshift=18,
-        font=dict(size=12, color="white", family="Arial Black, Arial"),
-        bgcolor=CURRENT_COLOR, borderpad=5,
+    layers.append(
+        alt.Chart(pd.DataFrame({
+            "month_label": [current_label], "y": [label_y], "label": ["📍 지금"],
+        }))
+        .mark_text(fontSize=12, fontWeight="bold", color="#7c3aed")
+        .encode(x=alt.X("month_label:N", sort=order), y=alt.Y("y:Q"), text="label:N")
     )
 
-    # 범례를 차트 "아래"로 내려서, 상단은 최저가/지금 뱃지 전용 공간으로 비워둔다.
-    # (좁은 화면에서 범례와 뱃지가 같은 줄에서 겹쳐 보이는 것이 모바일 "깨짐"의 주요 원인이었다.)
-    fig.update_layout(
-        height=460,
-        margin=dict(l=10, r=10, t=66, b=70),
-        plot_bgcolor="rgba(255,255,255,0.35)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Pretendard, -apple-system, sans-serif", size=12),
-        legend=dict(
-            orientation="h", yanchor="top", y=-0.22, xanchor="center", x=0.5,
-            font=dict(size=12), bgcolor="rgba(0,0,0,0)",
-        ),
-        yaxis=dict(
-            title=dict(text="가격 (원)", font=dict(size=11, color="#9ca3af")),
-            showgrid=True,
-            gridcolor="#f2f2f2",
-            gridwidth=1,
-            zeroline=False,
-            tickformat=",",
-            automargin=True,
-        ),
-        xaxis=dict(
-            title=None,
-            showgrid=True,
-            gridcolor="#f8f8f8",
-            showline=True,
-            linecolor="#e5e7eb",
-            tickangle=-45,
-            tickfont=dict(size=11),
-            automargin=True,
-        ),
-        hovermode="x unified",
+    chart = (
+        alt.layer(*layers)
+        .properties(height=430)
+        .configure_view(strokeWidth=0)
+        .configure_axis(
+            grid=True, gridColor="#f2f2f2", domainColor="#e5e7eb",
+            labelColor="#6b7280", titleColor="#9ca3af", labelFontSize=11,
+        )
+        .configure_legend(orient="bottom", labelFontSize=12, titleFontSize=0)
     )
 
     with st.container(border=True):
-        st.plotly_chart(
-            fig,
-            use_container_width=True,
-            config={"responsive": True, "displayModeBar": False, "scrollZoom": False},
-        )
+        st.altair_chart(chart, use_container_width=True)
 
         # --------------------------------------------------------------
         # 월별 가격표 (그래프 검증용, 접어두는 심플한 표)
