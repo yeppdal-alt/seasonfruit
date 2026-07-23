@@ -1,6 +1,6 @@
 streamlit
 pandas
-altair
+plotly
 requests
 openpyxl
 openai
