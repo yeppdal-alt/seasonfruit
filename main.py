@@ -195,6 +195,32 @@ PRODUCTION_REGIONS = {
     "참외": "경북 성주 등",
 }
 
+# 참고용 수확(출하) 시즌 정보 (일반적으로 널리 알려진 국내 주산지 출하 시기 기준 요약).
+# "months"가 있으면 그래프에서 해당 달을 시즌으로 하이라이트하고, 대부분 수입이라 국내
+# 출하 시즌이 뚜렷하지 않은 품목은 months=None으로 두고 카드에는 label만 표시한다.
+HARVEST_SEASON = {
+    "사과":     {"months": [9, 10, 11],        "label": "9~11월"},
+    "배":       {"months": [9, 10],            "label": "9~10월"},
+    "복숭아":   {"months": [7, 8, 9],          "label": "7~9월"},
+    "포도":     {"months": [8, 9, 10],         "label": "8~10월"},
+    "감귤":     {"months": [11, 12, 1, 2],     "label": "11~2월"},
+    "단감":     {"months": [10, 11],           "label": "10~11월"},
+    "바나나":   {"months": None,               "label": "연중 (대부분 수입)"},
+    "참다래":   {"months": [11, 12],           "label": "11~12월 (국내산 기준)"},
+    "파인애플": {"months": None,               "label": "연중 (대부분 수입)"},
+    "오렌지":   {"months": None,               "label": "연중 (수입, 겨울~봄 성수기)"},
+    "자몽":     {"months": None,               "label": "연중 (수입)"},
+    "레몬":     {"months": None,               "label": "연중 (수입)"},
+    "체리":     {"months": [6, 7],             "label": "6~7월 (국내산 기준)"},
+    "망고":     {"months": [6, 7, 8],          "label": "6~8월 (국내산 기준)"},
+    "블루베리": {"months": [6, 7, 8],          "label": "6~8월"},
+    "아보카도": {"months": None,               "label": "연중 (수입)"},
+    "수박":     {"months": [6, 7, 8],          "label": "6~8월"},
+    "토마토":   {"months": [6, 7, 8, 9],       "label": "6~9월"},
+    "딸기":     {"months": [12, 1, 2, 3, 4],   "label": "12~4월"},
+    "참외":     {"months": [5, 6, 7],          "label": "5~7월"},
+}
+
 # 스마트 구매팁 - "좋은 과일 고르는 법" 폴백 문구 (Solar 호출이 실패했을 때만 사용).
 # 일반적으로 널리 알려진 신선도 판별 기준을 정리한 것으로, 과장 없이 사실 기반으로 작성했습니다.
 FRUIT_SELECTION_TIPS = {
@@ -1155,6 +1181,7 @@ else:
     varieties = VARIETY_LOOKUP.get((sel_ctgry_cd, sel_item_cd), [])
     variety_text = ", ".join(varieties[:6]) if varieties else "정보 없음"
     region_text = PRODUCTION_REGIONS.get(selected, "정보 없음")
+    season_text = HARVEST_SEASON.get(selected, {}).get("label", "정보 없음")
 
     # 여러 st.* 위젯을 나눠 호출하면 카드 배경(div)이 실제 내용을 감싸지 못하고 잘려 보이므로,
     # 카드 전체를 하나의 HTML 블록으로 만들어 배경이 내용을 온전히 감싸도록 한다.
@@ -1168,7 +1195,7 @@ else:
                 <b>{html.escape(light_label)}</b> {status_suffix}
             </div>
             <div class="analysis-line">{_format_rich_text(analysis_text)}</div>
-            <div class="extra-info">🌱 주요 품종: {html.escape(variety_text)} &nbsp;·&nbsp; 🗺️ 대표 산지: {html.escape(region_text)}</div>
+            <div class="extra-info">🌱 주요 품종: {html.escape(variety_text)} &nbsp;·&nbsp; 🗺️ 대표 산지: {html.escape(region_text)} &nbsp;·&nbsp; 📅 수확시즌: {html.escape(season_text)}</div>
         </div>
     </div>
     """
@@ -1245,6 +1272,37 @@ else:
 
     anchor_series = division_series.get("소매", next(iter(division_series.values())))
 
+    # 수확(출하) 시즌은 은은한 주황 배경 면으로 하이라이트한다. 최저가/지금 표시와 겹쳐도
+    # 구분되도록 테두리 없이 채우기만 사용하고, 최저가·지금 강조선보다 먼저 그려서 뒤쪽
+    # 배경 레이어가 되도록 한다.
+    HARVEST_COLOR = "#f59e0b"
+    harvest_months = HARVEST_SEASON.get(selected, {}).get("months")
+    if harvest_months:
+        harvest_month_set = set(harvest_months)
+        harvest_positions = [
+            i for i, m in enumerate(chart_df["month"]) if int(m) in harvest_month_set
+        ]
+        # 연속된 달끼리 묶어서 하나의 밴드로 표시한다 (예: 11,12,1,2월처럼 해가 바뀌는
+        # 시즌도 chart_df가 실제 달력 순서이므로 자연스럽게 하나로 이어진다).
+        harvest_runs = []
+        for p in harvest_positions:
+            if harvest_runs and p == harvest_runs[-1][1] + 1:
+                harvest_runs[-1] = (harvest_runs[-1][0], p)
+            else:
+                harvest_runs.append((p, p))
+        for r0, r1 in harvest_runs:
+            fig.add_vrect(
+                x0=r0 - 0.5, x1=r1 + 0.5,
+                fillcolor=HARVEST_COLOR, opacity=0.09, line_width=0,
+            )
+        if harvest_runs:
+            first_r0, _ = harvest_runs[0]
+            fig.add_annotation(
+                x=chart_df["month_label"].iloc[first_r0], y=1.14, xref="x", yref="paper",
+                text="🌾 수확시즌", showarrow=False, xanchor="left",
+                font=dict(size=11, color=HARVEST_COLOR, family="Arial Black, Arial"),
+            )
+
     # 최저가 달은 참고 이미지의 "적정시기" 밴드처럼, 은은한 배경 면 + 좌우 점선 테두리로
     # 표현한다. 현재 달은 축 위에 점 하나를 콕 찍고 위로 점선을 그어 "지금 여기"를 가리킨다.
     pos_in_chart = cheapest_pos
@@ -1286,7 +1344,7 @@ else:
 
     fig.update_layout(
         height=420,
-        margin=dict(l=0, r=0, t=44, b=60),
+        margin=dict(l=0, r=0, t=58, b=60),
         plot_bgcolor="rgba(255,255,255,0)",
         paper_bgcolor="rgba(0,0,0,0)",
         font=dict(family="Pretendard, -apple-system, sans-serif", size=12),
