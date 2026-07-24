@@ -1338,7 +1338,7 @@ else:
         if harvest_runs:
             first_r0, _ = harvest_runs[0]
             fig.add_annotation(
-                x=chart_df["month_label"].iloc[first_r0], y=1.14, xref="x", yref="paper",
+                x=chart_df["month_label"].iloc[first_r0], y=1.24, xref="x", yref="paper",
                 text="🌾 수확시즌", showarrow=False, xanchor="left",
                 font=dict(size=11, color=HARVEST_COLOR, family="Arial Black, Arial"),
             )
@@ -1361,7 +1361,7 @@ else:
             line=dict(color=CHEAPEST_COLOR, width=1.3, dash="dot"),
         )
     fig.add_annotation(
-        x=chart_df["month_label"].iloc[pos_in_chart], y=1.06, xref="x", yref="paper",
+        x=chart_df["month_label"].iloc[pos_in_chart], y=1.15, xref="x", yref="paper",
         text="최저가 달", showarrow=False,
         font=dict(size=12, color=CHEAPEST_COLOR, family="Arial Black, Arial"),
     )
@@ -1384,7 +1384,7 @@ else:
 
     fig.update_layout(
         height=420,
-        margin=dict(l=0, r=0, t=58, b=60),
+        margin=dict(l=0, r=0, t=78, b=60),
         plot_bgcolor="rgba(255,255,255,0)",
         paper_bgcolor="rgba(0,0,0,0)",
         font=dict(family="Pretendard, -apple-system, sans-serif", size=12),
