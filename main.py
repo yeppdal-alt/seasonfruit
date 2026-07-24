@@ -733,36 +733,6 @@ def fetch_fruit_series(fruit_name: str, start_ym: str, end_ym: str) -> tuple[pd.
         return _build_demo_dataframe(fruit_name, start_ym, end_ym), False, "error"
 
 
-def _extended_start_ym(end_ym: str, years_back: int) -> str:
-    """end_ym 기준으로 years_back년 전, 같은 달을 시작월로 하는 YYYYMM 문자열을 만든다."""
-    ey, em = int(end_ym[:4]), int(end_ym[4:])
-    return f"{ey - years_back}{em:02d}"
-
-
-@st.cache_data(ttl=3600, show_spinner=False)
-def fetch_fruit_series_extended(fruit_name: str, primary_start_ym: str, end_ym: str):
-    """최근 12개월(primary_start_ym~end_ym)을 먼저 조회하고, 데이터가 없거나(no_data) 응답을
-    확인하지 못하면(error) 자몽처럼 유통량이 적어 조사가 비는 품목을 위해 최근 2년(24개월)
-    범위로 넓혀 한 번 더 시도한다. 그래도 데이터를 못 찾으면 원래 12개월 범위 기준 데모
-    데이터로 대체한다.
-
-    반환값: (DataFrame, is_live, reason, start_ym, end_ym, used_extended_range)
-    - used_extended_range가 True면 12개월 범위에 데이터가 없어 24개월 범위로 넓혀서
-      실 데이터를 찾았다는 뜻(이때 is_live=True).
-    """
-    df, is_live, reason = fetch_fruit_series(fruit_name, primary_start_ym, end_ym)
-    if is_live:
-        return df, True, "", primary_start_ym, end_ym, False
-
-    extended_start_ym = _extended_start_ym(end_ym, years_back=2)
-    ext_df, ext_is_live, _ext_reason = fetch_fruit_series(fruit_name, extended_start_ym, end_ym)
-    if ext_is_live:
-        return ext_df, True, "", extended_start_ym, end_ym, True
-
-    # 24개월로 넓혀도 데이터가 없으면 원래 12개월 범위 기준 데모 데이터를 그대로 사용한다.
-    return df, False, reason, primary_start_ym, end_ym, False
-
-
 def _month_range(start_ym: str, end_ym: str):
     sy, sm = int(start_ym[:4]), int(start_ym[4:])
     ey, em = int(end_ym[:4]), int(end_ym[4:])
@@ -1101,21 +1071,13 @@ st.divider()
 # Price Status Card
 # ----------------------------------------------------------------------------
 selected = st.session_state.selected_fruit
-(
-    fruit_df, is_live, fetch_reason, ACTIVE_START_YM, ACTIVE_END_YM, used_extended_range,
-) = fetch_fruit_series_extended(selected, START_YM, END_YM)
+fruit_df, is_live, fetch_reason = fetch_fruit_series(selected, START_YM, END_YM)
 
-if used_extended_range:
-    st.info(
-        f"ℹ️ '{selected}'는 최근 12개월 안에는 등록된 가격 데이터가 없어서, 범위를 최근 2년"
-        "(24개월)으로 넓혀 조회한 실제 데이터를 보여주고 있어요.",
-        icon="ℹ️",
-    )
-elif not is_live:
+if not is_live:
     if fetch_reason == "no_data":
         st.info(
             f"ℹ️ '{selected}'는 공공데이터 API 요청은 정상 처리됐지만(응답 정상, 조회 결과 0건), "
-            "최근 2년 범위에도 등록된 가격 데이터가 없어서 계절성을 반영한 데모 데이터로 표시하고 "
+            "최근 조사 기간에 등록된 가격 데이터가 없어서 계절성을 반영한 데모 데이터로 표시하고 "
             "있어요. 키/승인 문제는 아니고, 자몽처럼 유통량이 적은 수입 품목은 특정 기간에 조사가 "
             "안 되기도 해요.",
             icon="ℹ️",
@@ -1131,8 +1093,7 @@ elif not is_live:
         st.code(
             f"부류코드(ctgry_cd): {_debug_ctgry}\n"
             f"품목코드(item_cd): {_debug_item}\n"
-            f"조회 기간(12개월): {START_YM} ~ {END_YM}\n"
-            f"조회 기간(2년 재시도): {_extended_start_ym(END_YM, years_back=2)} ~ {END_YM}\n\n"
+            f"조회 기간: {START_YM} ~ {END_YM}\n\n"
             f"{API_ENDPOINT}"
             f"?serviceKey=(발급받은 키)&returnType=json&pageNo=1&numOfRows=1000"
             f"&cond[exmn_ym::GTE]={START_YM}&cond[exmn_ym::LTE]={END_YM}"
@@ -1144,7 +1105,7 @@ elif not is_live:
         )
 
 _primary_df, price_basis_label = _primary_division_frame(fruit_df)
-overall_monthly = None if fruit_df.empty else _chronological_monthly(_primary_df, ACTIVE_START_YM, ACTIVE_END_YM)
+overall_monthly = None if fruit_df.empty else _chronological_monthly(_primary_df, START_YM, END_YM)
 latest = None if overall_monthly is None else _latest_with_data(overall_monthly)
 
 if fruit_df.empty or latest is None:
@@ -1271,7 +1232,7 @@ else:
             if div_name not in divisions:
                 continue
             d = _chronological_monthly(
-                fruit_df[fruit_df["division"] == div_name], ACTIVE_START_YM, ACTIVE_END_YM
+                fruit_df[fruit_df["division"] == div_name], START_YM, END_YM
             )
             d = d.set_index(["year", "month"]).reindex(
                 list(zip(chart_df["year"], chart_df["month"]))
@@ -1450,7 +1411,7 @@ else:
                 for div_name in ["소매", "도매"]:
                     if div_name in divisions:
                         d = _chronological_monthly(
-                            fruit_df[fruit_df["division"] == div_name], ACTIVE_START_YM, ACTIVE_END_YM
+                            fruit_df[fruit_df["division"] == div_name], START_YM, END_YM
                         )
                         d = d.set_index(["year", "month"]).reindex(
                             list(zip(chart_df["year"], chart_df["month"]))
@@ -1584,7 +1545,7 @@ else:
         else ""
     )
     st.caption(
-        f"데이터 기간: {ACTIVE_START_YM[:4]}.{ACTIVE_START_YM[4:]} ~ {ACTIVE_END_YM[:4]}.{ACTIVE_END_YM[4:]}  ·  "
+        f"데이터 기간: {START_YM[:4]}.{START_YM[4:]} ~ {END_YM[:4]}.{END_YM[4:]}  ·  "
         f"부류코드 {ctgry_cd} / 품목코드 {item_cd}  ·  "
         f"{SOURCE_NOTE}"
         + ("" if is_live else " (데모 데이터)")
